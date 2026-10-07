@@ -1,0 +1,10 @@
+{
+  "name": "ASUS ROG Crosshair X670E Hero",
+  "hardware_regex": "CROSSHAIR X670E HERO",
+  "limits": [
+    { "role": "mb.vrm", "label": "VRM (Super I/O)", "warn": 90, "crit": 105, "hysteresis": 2, "min_duration_s": 5, "source": "Typical MOSFET rating" },
+    { "role": "mb.chipset", "label": "Chipset", "warn": 80, "crit": 95, "hysteresis": 2, "min_duration_s": 10, "source": "AMD X670 chipset, conservative" },
+    { "role": "mb.12v", "label": "+12 V rail", "kind": "band", "nominal": 12.0, "warn_pct": 5, "crit_pct": 8, "hysteresis": 0.5, "min_duration_s": 2, "source": "ATX spec ±5 %" },
+    { "role": "fan.cpu", "label": "CPU fan stalled", "kind": "zero_while", "crit": 0, "while_role": "cpu.tctl", "while_above": 60, "min_duration_s": 5, "source": "Fan failure: 0 RPM while CPU > 60 °C" }
+  ]
+}

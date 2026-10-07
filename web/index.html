@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BlackBox</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23111'/%3E%3Ccircle cx='8' cy='8' r='3.5' fill='%23e5484d'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="uplot.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span>BlackBox</div>
+  <div id="status" class="status" title="Service self-measurement (/api/status)">…</div>
+</header>
+
+<section class="bar">
+  <div class="group" id="presets">
+    <button data-dur="900000">15 m</button>
+    <button data-dur="3600000" class="on">1 h</button>
+    <button data-dur="21600000">6 h</button>
+    <button data-dur="86400000">24 h</button>
+    <button data-dur="259200000">72 h</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="live" checked> live</label>
+  <div class="group" id="agg" title="How buckets are reduced when zoomed out">
+    <button data-agg="max" class="on">max</button><button data-agg="avg">avg</button><button data-agg="min">min</button>
+  </div>
+  <select id="jump"><option value="">Jump to event…</option></select>
+  <span class="spacer"></span>
+  <button id="zoomSel" disabled>Zoom to selection</button>
+  <button id="clearSel" disabled>Clear selection</button>
+  <button id="pick">Sensors…</button>
+  <button id="export">Export CSV</button>
+</section>
+
+<div id="banner" class="banner" hidden></div>
+
+<section class="overview">
+  <div class="label">72 h overview — drag to choose a range</div>
+  <div id="overview"></div>
+</section>
+
+<div class="range-label" id="rangeLabel"></div>
+
+<main>
+  <div id="charts"></div>
+  <aside id="panel">
+    <h2 id="selTitle">Visible range</h2>
+    <div id="finals" hidden>
+      <h3>Tier-1 sensors in this window</h3>
+      <table class="t" id="finalsTable"></table>
+    </div>
+    <h3>Processes <span class="muted">(power = estimate)</span></h3>
+    <table class="t" id="procTable"></table>
+    <h3>Limits</h3>
+    <table class="t" id="limitTable"></table>
+    <h3>Events</h3>
+    <div id="eventList" class="events"></div>
+  </aside>
+</main>
+
+<dialog id="picker">
+  <form method="dialog">
+    <h2>Custom chart sensors</h2>
+    <input id="pickFilter" type="search" placeholder="filter…" autocomplete="off">
+    <div id="pickList" class="picklist"></div>
+    <div class="row"><button value="clear" id="pickClear" type="button">Clear</button><span class="spacer"></span><button value="ok">Done</button></div>
+  </form>
+</dialog>
+
+<script src="uplot.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

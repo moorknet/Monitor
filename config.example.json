@@ -1,0 +1,24 @@
+{
+  // Copy to C:\ProgramData\BlackBox\config.json and restart the service. All keys optional.
+  "port": 8787,
+  "retention_hours": 72,
+  "commit_interval_ms": 2000,
+  "tier2_every_s": 10,
+  "process_interval_s": 2,
+  "top_by_cpu": 10,
+  "top_by_gpu": 5,
+  "proc_threshold_pct": 5,
+  "db_budget_mb": 500,
+  "slow_tick_ms": 200,
+
+  // regex on "<hardware name>/<sensor name>" or the LHM identifier -> tier (0 = don't store, 1 = 1 Hz, 2 = every tier2_every_s)
+  "tier_overrides": {
+    "^Nuvoton.*/Chipset$": 1,
+    "/Data (Read|Written)$": 0
+  },
+
+  // same shape as profiles/*.json limits; wins over profiles for the same role
+  "limit_overrides": [
+    // { "role": "gpu.hotspot", "warn": 95, "crit": 105, "hysteresis": 2, "min_duration_s": 3, "source": "my tighter limit" }
+  ]
+}

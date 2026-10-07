@@ -1,0 +1,16 @@
+{
+  // Fallback limits for unknown hardware. Hardware-specific profiles take precedence per role.
+  "name": "Generic fallback",
+  "hardware_regex": null,
+  "limits": [
+    { "role": "cpu.tctl",    "label": "CPU Tctl/Tdie", "warn": 85, "crit": 95, "hysteresis": 2, "min_duration_s": 3, "source": "Generic: Tjmax-10 assuming Tjmax 95 °C (unknown CPU)" },
+    { "role": "gpu.hotspot", "label": "GPU hotspot",   "warn": 100, "crit": 110, "hysteresis": 2, "min_duration_s": 3, "source": "Generic GPU junction limit" },
+    { "role": "gpu.edge",    "label": "GPU edge",      "warn": 85, "crit": 95, "hysteresis": 2, "min_duration_s": 3, "source": "Generic GPU edge limit" },
+    { "role": "gpu.mem_temp","label": "GPU memory",    "warn": 90, "crit": 100, "hysteresis": 2, "min_duration_s": 3, "source": "GDDR6 typical max ~105 °C" },
+    { "role": "mb.vrm",      "label": "VRM",           "warn": 90, "crit": 105, "hysteresis": 2, "min_duration_s": 5, "source": "Typical MOSFET rating" },
+    { "role": "nvme.temp",   "label": "NVMe composite","warn": 70, "crit": 80, "hysteresis": 2, "min_duration_s": 10, "source": "Typical NVMe throttle point" },
+    { "role": "dimm.temp",   "label": "DDR5 SPD temp", "warn": 75, "crit": 85, "hysteresis": 2, "min_duration_s": 10, "source": "JEDEC SPD hub" },
+    { "role": "mb.12v", "label": "+12 V rail", "kind": "band", "nominal": 12.0, "warn_pct": 5, "crit_pct": 8, "hysteresis": 0.5, "min_duration_s": 2, "source": "ATX spec ±5 %" },
+    { "role": "fan.cpu", "label": "CPU fan stalled", "kind": "zero_while", "crit": 0, "while_role": "cpu.tctl", "while_above": 60, "min_duration_s": 5, "source": "Fan failure: 0 RPM while CPU > 60 °C" }
+  ]
+}

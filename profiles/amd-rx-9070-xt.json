@@ -1,0 +1,10 @@
+{
+  "name": "AMD Radeon RX 9070 XT",
+  "hardware_regex": "RX 9070 XT",
+  "limits": [
+    { "role": "gpu.hotspot",  "label": "GPU junction/hotspot", "warn": 100, "crit": 110, "hysteresis": 2, "min_duration_s": 3, "source": "AMD throttle point ~110 °C" },
+    { "role": "gpu.edge",     "label": "GPU edge",             "warn": 85,  "crit": 95,  "hysteresis": 2, "min_duration_s": 3, "source": "RDNA4 edge, conservative" },
+    { "role": "gpu.mem_temp", "label": "GPU memory",           "warn": 90,  "crit": 100, "hysteresis": 2, "min_duration_s": 3, "source": "GDDR6 typical max ~105 °C" },
+    { "role": "gpu.board_power", "label": "GPU board power",   "warn": 304, "crit": 340, "hysteresis": 10, "min_duration_s": 3, "source": "Reference TBP 304 W" }
+  ]
+}
