@@ -114,7 +114,25 @@ app.Use(async (ctx, next) =>
     }
 });
 app.UseDefaultFiles();
-app.UseStaticFiles();
+// index.html references its scripts/styles as app.js?v=<version>, so an update can never run against JS the browser
+// cached from the previous version (that left the Settings tab blank and old event markers on screen after updating).
+string? indexHtml = null;
+app.Use(async (ctx, next) =>
+{
+    if (ctx.Request.Path == "/" || ctx.Request.Path == "/index.html")
+    {
+        indexHtml ??= System.Text.RegularExpressions.Regex.Replace(
+            File.ReadAllText(Path.Combine(app.Environment.WebRootPath, "index.html")),
+            @"(src|href)=""([\w.-]+\.(?:js|css))""", m => $"{m.Groups[1].Value}=\"{m.Groups[2].Value}?v={BlackBox.Update.UpdateService.Current}\"");
+        ctx.Response.ContentType = "text/html; charset=utf-8";
+        ctx.Response.Headers.CacheControl = "no-cache";
+        await ctx.Response.WriteAsync(indexHtml);
+        return;
+    }
+    await next();
+});
+// "no-cache" = always revalidate (cheap 304): without it browsers heuristically keep the old app.js after an update
+app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = c => c.Context.Response.Headers.CacheControl = "no-cache" });
 Api.Map(app, cfg);
 CostApi.Map(app, cfg);
 SettingsApi.Map(app, cfg);

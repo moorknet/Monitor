@@ -103,15 +103,24 @@ function overlayPlugin(getSeriesLimits) {
           ctx.fillStyle = 'rgba(78,156,255,0.13)';
           ctx.fillRect(x0, top, x1 - x0, height);
         }
-        // event markers
+        // event markers: merged per 8 px (worst severity wins); if still dense, drawn as ticks on the top edge so they never cover data
+        const rank = { crit: 3, warn: 2, info: 1 }, bucket = 8 * dpr, cells = new Map();
         for (const e of state.events) {
           if (!markerShown(e)) continue;
           const px = x(e.ts);
           if (px < left || px > left + width) continue;
-          ctx.strokeStyle = e.severity === 'crit' ? '#e5484d' : e.severity === 'warn' ? '#f5a524' : '#6b7480';
-          ctx.lineWidth = (e.severity === 'crit' ? 2 : 1) * dpr;
-          ctx.setLineDash(e.severity === 'info' ? [2 * dpr, 3 * dpr] : []);
-          ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, top + height); ctx.stroke();
+          const k = Math.round(px / bucket), cur = cells.get(k);
+          if (!cur || rank[e.severity] > rank[cur.sev]) cells.set(k, { px, sev: e.severity });
+        }
+        // full-height lines only for critical events (crash, WHEA, TDR, critical breach) unless they are too many to read;
+        // warnings/info are short ticks along the top edge (hover the event list for details)
+        let crit = 0; for (const c of cells.values()) if (c.sev === 'crit') crit++;
+        for (const { px, sev } of cells.values()) {
+          ctx.strokeStyle = sev === 'crit' ? '#e5484d' : sev === 'warn' ? '#f5a524' : '#6b7480';
+          ctx.lineWidth = (sev === 'crit' ? 2 : 1) * dpr;
+          ctx.setLineDash([]);
+          const full = sev === 'crit' && crit <= width / (40 * dpr);
+          ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, top + (full ? height : 7 * dpr)); ctx.stroke();
         }
         ctx.setLineDash([]);
         // limit lines + points above warn

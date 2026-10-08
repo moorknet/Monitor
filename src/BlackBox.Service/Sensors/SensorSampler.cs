@@ -22,6 +22,7 @@ public sealed class SensorSampler : BackgroundService
     double _vClkMax = double.NaN, _vClkAvg = double.NaN, _vLoadMax = double.NaN, _vPowerTotal = double.NaN, _vNvmeMax = double.NaN;
     SensorDesc[] _nvme = [];
     long _tick, _lastReset, _lastSlowEvent;
+    int _resets;
 
     public IReadOnlyList<HwGroup> Groups => _groups;
     public SensorDesc? CpuPower => _cpuPower;
@@ -127,11 +128,13 @@ public sealed class SensorSampler : BackgroundService
         _limits.Evaluate(ts);
         _energy.Add(ts, Fresh(_cpuPower, ts), Fresh(_gpuPower, ts));
 
-        if (needReset && ts - _lastReset > 30_000)
+        if (_resets > 0 && ts - _lastReset > 3_600_000) _resets = 0;     // an hour without trouble: back to quick retries
+        if (needReset && ts - _lastReset > 30_000L << Math.Min(_resets, 7))  // 30 s, 1 min, 2 min … capped at ~1 h
         {
-            // e.g. GPU TDR / driver reset: reopen the backend instead of crashing
-            _lastReset = ts;
-            _writer.Event("sensor_reset", "warn", "Sensor backend reset after repeated update failures (driver reset?)");
+            // e.g. GPU TDR / driver reset: reopen the backend instead of crashing. Backs off if a device keeps failing,
+            // so a permanently broken sensor can't make us reopen every device every 30 s.
+            _lastReset = ts; _resets++;
+            _writer.Event("sensor_reset", "warn", $"Sensor backend reset after repeated update failures (driver reset?); attempt {_resets}");
             _source.Reset();
             Build();
         }
