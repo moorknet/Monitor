@@ -11,9 +11,14 @@
 <body>
 <header>
   <div class="brand"><span class="dot"></span>BlackBox</div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="rec" class="on">Recorder</button>
+    <button data-tab="cost">Power &amp; cost</button>
+  </nav>
   <div id="status" class="status" title="Service self-measurement (/api/status)">…</div>
 </header>
 
+<div id="tab-rec">
 <section class="bar">
   <div class="group" id="presets">
     <button data-dur="900000">15 m</button>
@@ -59,6 +64,27 @@
     <div id="eventList" class="events"></div>
   </aside>
 </main>
+</div>
+
+<div id="tab-cost" hidden>
+  <section class="tiles" id="tiles"></section>
+  <div class="cost-grid">
+    <div>
+      <div class="chart"><h3 id="priceTitle">Electricity price — today &amp; tomorrow</h3><div id="priceChart"></div><div class="note" id="priceNote"></div></div>
+      <div class="chart"><h3>Cost per hour — last 48 h</h3><div id="hourChart"></div></div>
+      <div class="chart"><h3>Cost per day — last 30 days</h3><div id="dayChart"></div></div>
+    </div>
+    <aside>
+      <h2>Fun facts</h2>
+      <ul class="facts" id="facts"></ul>
+      <h3>What cost the most this month</h3>
+      <table class="t" id="costProcs"></table>
+      <h3>Periods</h3>
+      <table class="t" id="periods"></table>
+      <p class="note" id="method"></p>
+    </aside>
+  </div>
+</div>
 
 <dialog id="picker">
   <form method="dialog">
@@ -71,5 +97,6 @@
 
 <script src="uplot.min.js"></script>
 <script src="app.js"></script>
+<script src="cost.js"></script>
 </body>
 </html>

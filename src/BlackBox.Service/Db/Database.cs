@@ -17,6 +17,10 @@ public static class Database
         CREATE TABLE IF NOT EXISTS proc_minute (ts INT, procname_id INT, n INT, cpu_sum REAL, cpu_max REAL, gpu_sum REAL, gpu_max REAL,
                                                 ws_max REAL, io_sum REAL, cw_sum REAL, gw_sum REAL, w_max REAL,
                                                 PRIMARY KEY (ts, procname_id)) WITHOUT ROWID;
+        -- long-term tables (kept LongRetentionDays, not 72 h): energy per 15 min, per-process energy per hour, spot prices
+        CREATE TABLE IF NOT EXISTS energy_quarter (ts INTEGER PRIMARY KEY, cpu_wh REAL, gpu_wh REAL, wall_wh REAL, seconds REAL);
+        CREATE TABLE IF NOT EXISTS proc_energy_hour (ts INT, procname_id INT, wh REAL, PRIMARY KEY (ts, procname_id)) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS price (ts INTEGER PRIMARY KEY, ts_end INT, spot REAL, area TEXT);
         CREATE TABLE IF NOT EXISTS event (id INTEGER PRIMARY KEY, ts INT, kind TEXT, severity TEXT,
                                           source TEXT, sensor_id INT, value REAL, message TEXT);
         CREATE INDEX IF NOT EXISTS ix_event_ts ON event(ts);

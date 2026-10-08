@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using BlackBox.Energy;
 using BlackBox.Sensors;
 using Microsoft.Data.Sqlite;
 using SQLitePCL;
@@ -38,6 +39,10 @@ public sealed class Writer : IDisposable
     sqlite3_stmt _insSample = null!, _insProc = null!, _upMinute = null!;
     struct MinuteAgg { public long N; public double CpuSum, CpuMax, GpuSum, GpuMax, WsMax, IoSum, CwSum, GwSum, WMax; }
     readonly Dictionary<(long ts, int id), MinuteAgg> _minutes = new();
+    readonly Dictionary<(long ts, int id), double> _procHourWh = new();
+    readonly EnergyMeter? _meter;
+    readonly EnergyMeter.Acc[] _energy = new EnergyMeter.Acc[4];
+    sqlite3_stmt _upEnergy = null!, _upProcHour = null!;
     SqliteCommand _insEvent = null!;
     SqliteParameter[] _pE = null!;
 
@@ -53,7 +58,7 @@ public sealed class Writer : IDisposable
     public DateTime? LastRetention;
     public string? ResetReason { get; private set; }
 
-    public Writer(Config cfg, ILogger<Writer> log) { _cfg = cfg; _log = log; }
+    public Writer(Config cfg, ILogger<Writer> log, EnergyMeter? meter = null) { _cfg = cfg; _log = log; _meter = meter; }
 
     public void Open(bool uncleanShutdown)
     {
@@ -66,6 +71,15 @@ public sealed class Writer : IDisposable
             ON CONFLICT(ts, procname_id) DO UPDATE SET n=n+excluded.n, cpu_sum=cpu_sum+excluded.cpu_sum, cpu_max=MAX(cpu_max,excluded.cpu_max),
               gpu_sum=gpu_sum+excluded.gpu_sum, gpu_max=MAX(gpu_max,excluded.gpu_max), ws_max=MAX(ws_max,excluded.ws_max),
               io_sum=io_sum+excluded.io_sum, cw_sum=cw_sum+excluded.cw_sum, gw_sum=gw_sum+excluded.gw_sum, w_max=MAX(w_max,excluded.w_max)
+            """);
+        _upEnergy = Raw("""
+            INSERT INTO energy_quarter(ts, cpu_wh, gpu_wh, wall_wh, seconds) VALUES (?,?,?,?,?)
+            ON CONFLICT(ts) DO UPDATE SET cpu_wh=cpu_wh+excluded.cpu_wh, gpu_wh=gpu_wh+excluded.gpu_wh,
+              wall_wh=wall_wh+excluded.wall_wh, seconds=seconds+excluded.seconds
+            """);
+        _upProcHour = Raw("""
+            INSERT INTO proc_energy_hour(ts, procname_id, wh) VALUES (?,?,?)
+            ON CONFLICT(ts, procname_id) DO UPDATE SET wh = wh + excluded.wh
             """);
         _insEvent = Prep("INSERT INTO event(ts,kind,severity,source,sensor_id,value,message) VALUES ($1,$2,$3,$4,$5,$6,$7)", 7, out _pE);
         using var cmd = _c.CreateCommand();
@@ -162,7 +176,8 @@ public sealed class Writer : IDisposable
             if (_samples.Length < _samplesOut.Length) _samples = new SampleRow[_samplesOut.Length];
             if (_procs.Length < _procsOut.Length) _procs = new ProcRow[_procsOut.Length];
         }
-        if (nS == 0 && nP == 0 && _events.IsEmpty) return;
+        int nEn = _meter?.Drain(_energy) ?? 0;
+        if (nS == 0 && nP == 0 && nEn == 0 && _events.IsEmpty) return;
 
         long t0 = Stopwatch.GetTimestamp();
         lock (_dbLock)
@@ -193,6 +208,8 @@ public sealed class Writer : IDisposable
                 m.N++; m.CpuSum += r.Cpu; m.GpuSum += r.Gpu; m.IoSum += r.IoBps; m.CwSum += r.EstCpuW; m.GwSum += r.EstGpuW;
                 m.CpuMax = Math.Max(m.CpuMax, r.Cpu); m.GpuMax = Math.Max(m.GpuMax, r.Gpu); m.WsMax = Math.Max(m.WsMax, r.WsMb);
                 m.WMax = Math.Max(m.WMax, r.EstCpuW + r.EstGpuW);
+                ref var ph = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(_procHourWh, (r.Ts / 3_600_000 * 3_600_000, r.Key.Id), out _);
+                ph += (r.EstCpuW + r.EstGpuW) * _cfg.ProcessIntervalS / 3600.0;
                 r.Key = null!; // drop reference
             }
             foreach (var ((mts, mid), m) in _minutes)
@@ -207,6 +224,21 @@ public sealed class Writer : IDisposable
                 Step(st);
             }
             _minutes.Clear();
+            foreach (var ((hts, hid), wh) in _procHourWh)
+            {
+                raw.sqlite3_bind_int64(_upProcHour, 1, hts); raw.sqlite3_bind_int(_upProcHour, 2, hid);
+                raw.sqlite3_bind_double(_upProcHour, 3, wh);
+                Step(_upProcHour);
+            }
+            _procHourWh.Clear();
+            for (int i = 0; i < nEn; i++)
+            {
+                ref var e = ref _energy[i];
+                raw.sqlite3_bind_int64(_upEnergy, 1, e.Ts); raw.sqlite3_bind_double(_upEnergy, 2, e.CpuWh);
+                raw.sqlite3_bind_double(_upEnergy, 3, e.GpuWh); raw.sqlite3_bind_double(_upEnergy, 4, e.WallWh);
+                raw.sqlite3_bind_double(_upEnergy, 5, e.Seconds);
+                Step(_upEnergy);
+            }
             int nE = 0;
             while (_events.TryDequeue(out var e))
             {
@@ -254,6 +286,9 @@ public sealed class Writer : IDisposable
         foreach (var id in ids)
             lock (_dbLock) deleted += Del("DELETE FROM sample WHERE sensor_id = $id AND ts < $c", ("$id", id), ("$c", cutoff));
         lock (_dbLock) deleted += Del("DELETE FROM proc_minute WHERE ts < $c", ("$c", cutoff));
+        long longCut = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _cfg.LongRetentionMs;
+        foreach (var t in new[] { "energy_quarter", "proc_energy_hour", "price" })
+            lock (_dbLock) deleted += Del($"DELETE FROM {t} WHERE ts < $c", ("$c", longCut));
         foreach (var table in new[] { "proc_sample", "event" })
         {
             int n;
@@ -290,7 +325,7 @@ public sealed class Writer : IDisposable
         try { Flush(); } catch (Exception ex) { _log.LogError(ex, "final flush failed"); }
         lock (_dbLock)
         {
-            _insSample?.Dispose(); _insProc?.Dispose(); _upMinute?.Dispose(); _insEvent?.Dispose();
+            _insSample?.Dispose(); _insProc?.Dispose(); _upMinute?.Dispose(); _upEnergy?.Dispose(); _upProcHour?.Dispose(); _insEvent?.Dispose();
             try { if (_c != null) Database.Exec(_c, "PRAGMA wal_checkpoint(TRUNCATE)"); } catch { }
             _c?.Dispose();
         }

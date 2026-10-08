@@ -23,6 +23,8 @@ public sealed class Config
     /// <summary>User limits; same shape as profile limits, override profile entries with the same role.</summary>
     public List<LimitDef> LimitOverrides { get; set; } = new();
 
+    public ElectricityConfig Electricity { get; set; } = new();
+
     /// <summary>Run with synthetic sensors/processes (development on non-Windows / no driver).</summary>
     public bool Simulate { get; set; }
 
@@ -30,6 +32,8 @@ public sealed class Config
     [JsonIgnore] public string DbPath => Path.Combine(DataPath, "blackbox.db");
     [JsonIgnore] public string LogDir => Path.Combine(DataPath, "logs");
     [JsonIgnore] public long RetentionMs => RetentionHours * 3600_000L;
+
+    [JsonIgnore] public long LongRetentionMs => Electricity.LongRetentionDays * 86_400_000L;
 
     public static string DefaultDataDir() => OperatingSystem.IsWindows()
         ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "BlackBox")
@@ -54,9 +58,35 @@ public sealed class Config
         Config cfg = File.Exists(path) ? JsonSerializer.Deserialize<Config>(File.ReadAllText(path), Json) ?? new() : new();
         cfg.DataDir ??= dataDir;
         if (args.Contains("--simulate") || !OperatingSystem.IsWindows()) cfg.Simulate = true;
+        // no network assumptions when simulating: synthetic prices unless the config forces a provider via BLACKBOX_REAL_PRICES
+        if (cfg.Simulate && cfg.Electricity.Provider == "elprisetjustnu" && Environment.GetEnvironmentVariable("BLACKBOX_REAL_PRICES") == null)
+            cfg.Electricity.Provider = "sim";
         for (int i = 0; i < args.Length - 1; i++) if (args[i] == "--port") cfg.Port = int.Parse(args[i + 1]);
         Directory.CreateDirectory(cfg.DataPath);
         Directory.CreateDirectory(cfg.LogDir);
         return cfg;
     }
+}
+
+/// <summary>Energy cost estimate settings ("Power &amp; cost" tab).</summary>
+public sealed class ElectricityConfig
+{
+    public bool Enabled { get; set; } = true;
+    /// <summary>elprisetjustnu (Swedish spot prices, SE1-SE4) | fixed | sim</summary>
+    public string Provider { get; set; } = "elprisetjustnu";
+    public string Area { get; set; } = "SE3";
+    public string Currency { get; set; } = "SEK";
+    public string BaseUrl { get; set; } = "https://www.elprisetjustnu.se/api/v1/prices";
+    /// <summary>Provider "fixed": all-inclusive price per kWh (surcharge and VAT are not added).</summary>
+    public double FixedPricePerKwh { get; set; } = 2.0;
+    /// <summary>Added to the spot price before VAT: grid transfer fee + energy tax + supplier markup, per kWh.</summary>
+    public double SurchargePerKwh { get; set; }
+    public double VatPct { get; set; } = 25;
+    /// <summary>Rest of the system not covered by sensors (board, RAM, SSDs, fans, pump), in watts.</summary>
+    public double BaseLoadW { get; set; } = 60;
+    public double PsuEfficiency { get; set; } = 0.92;
+    /// <summary>Energy, price and per-process energy history is kept this long (the 72 h limit is for raw samples only).</summary>
+    public int LongRetentionDays { get; set; } = 730;
+
+    public double Total(double spot) => Provider == "fixed" ? FixedPricePerKwh : (spot + SurchargePerKwh) * (1 + VatPct / 100);
 }

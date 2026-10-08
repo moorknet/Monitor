@@ -88,6 +88,28 @@ To run as a console app (for debugging), stop the service and run `BlackBox.exe`
 - **Sensors…** builds the Custom chart from any recorded sensor. **Export CSV** saves the selection, or the visible range,
   as a wide CSV.
 
+## Power & cost tab
+
+The second tab turns the measured power into an electricity bill estimate, with some fun facts on top.
+
+- **Energy.** Every sensor tick integrates *estimated wall power* = (CPU package W + GPU board W + `base_load_w`) ÷
+  `psu_efficiency` into 15-minute buckets (`energy_quarter`). Per-process attributed energy is summed per hour
+  (`proc_energy_hour`). These tables are kept for `long_retention_days` (default 2 years, about 2 MB/year); the 72 h limit
+  only applies to raw samples.
+- **Prices.** With `provider: "elprisetjustnu"` (the default) the service fetches Nord Pool spot prices for your area (`SE3`
+  by default) from elprisetjustnu.se: today's, tomorrow's once they are published around 13:00, and up to 30 missing past days.
+  That is one small HTTPS request per day, checked every 30 min. Outside Sweden, use `provider: "fixed"` with
+  `fixed_price_per_kwh`. Prices are stored as spot. Cost = kWh × (spot + `surcharge_per_kwh`) × (1 + VAT), worked out
+  when you view it, so changing the surcharge in `config.json` re-prices your history after a restart.
+  **Set `surcharge_per_kwh` to your grid fee + energy tax** (both on your electricity bill), or the tab shows spot + VAT only.
+- **What it shows:**
+  - Tiles: power draw now, price now, cost per hour, today, this month, last 30 days with a yearly projection.
+  - Today's and tomorrow's price curve, with the cheapest upcoming 3-hour window marked.
+  - Cost per hour for the last 48 h, and cost per day for the last 30 days.
+  - Which processes cost the most this month.
+  - Fun facts: what a game cost you, the cheapest time to play, what playing at today's cheapest price would have saved,
+    and the month's energy in litres of coffee boiled, EV km and phone charges.
+
 ## How it works
 
 | Component | Details |
@@ -131,6 +153,8 @@ scales with L3 size, and the 7800X3D has 96 MB. Check `private_mb` in `/api/stat
 2. Run for 1 h under Diablo 4 or a stress test, then check `/api/status`: `cpu_pct_avg` < 0.5, `private_mb` < 80, `db_projected_mb` < 500.
 3. Kill `BlackBox.exe` from Task Manager mid-run, then confirm the viewer shows a red power-loss gap and the DB opens.
 
+Cost API: `/api/cost/summary`, `/api/cost/hourly`, `/api/cost/daily?days=30`, `/api/cost/prices`, `/api/cost/processes`.
+
 ## Development
 
 ```bash
@@ -138,8 +162,10 @@ dotnet build BlackBox.sln -c Release
 # run anywhere with synthetic hardware (web UI on :8787)
 dotnet src/BlackBox.Service/bin/Release/net8.0-windows/BlackBox.dll --simulate --data ./data
 # write N hours of synthetic history (size / startup / query benchmarks)
-dotnet src/BlackBox.Service/bin/Release/net8.0-windows/BlackBox.dll --simulate --data ./data --generate-history 72
+dotnet src/BlackBox.Service/bin/Release/net8.0-windows/BlackBox.dll --simulate --data ./data --generate-history 72 --energy-days 35
 ```
+`--energy-days` adds simulated long-term energy (evening gaming sessions) for the cost tab. `--simulate` uses synthetic
+prices; set `BLACKBOX_REAL_PRICES=1` to fetch real ones while simulating.
 
 The project is not trimmed: LHM and System.Management rely on reflection and COM, so `PublishTrimmed` would break sensor
 discovery. The win-x64 publish is a ~120 MB single-file exe plus `e_sqlite3.dll`.

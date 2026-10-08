@@ -12,6 +12,7 @@ public sealed class SensorSampler : BackgroundService
     readonly LimitEvaluator _limits;
     readonly Stats _stats;
     readonly ILogger _log;
+    readonly Energy.EnergyMeter _energy;
 
     List<HwGroup> _groups = new();
     SensorDesc[] _coreClocks = [], _coreLoads = [];
@@ -26,8 +27,9 @@ public sealed class SensorSampler : BackgroundService
     public SensorDesc? GpuPower => _gpuPower;
     public SensorDesc? GpuLoad => _gpuLoad;
 
-    public SensorSampler(Config cfg, Writer writer, ISensorSource source, LimitEvaluator limits, Stats stats, ILogger<SensorSampler> log)
+    public SensorSampler(Config cfg, Writer writer, ISensorSource source, LimitEvaluator limits, Stats stats, Energy.EnergyMeter energy, ILogger<SensorSampler> log)
     {
+        _energy = energy;
         _cfg = cfg; _writer = writer; _source = source; _limits = limits; _stats = stats; _log = log;
         _derived = new HwGroup { Identifier = "/blackbox/derived", Name = "BlackBox (derived)", Kind = "Derived", Update = () => { } };
         SensorDesc D(string id, string name, string type, string role, Func<double> get)
@@ -113,6 +115,7 @@ public sealed class SensorSampler : BackgroundService
         ComputeDerived();
         ReadGroup(_derived, ts, tier2);
         _limits.Evaluate(ts);
+        _energy.Add(ts, Fresh(_cpuPower, ts), Fresh(_gpuPower, ts));
 
         if (needReset && ts - _lastReset > 30_000)
         {
@@ -146,6 +149,8 @@ public sealed class SensorSampler : BackgroundService
                 _writer.AddSample(ts, s.Id, Quantize(f, s.Quantum));
         }
     }
+
+    static double Fresh(SensorDesc? s, long ts) => s != null && s.LastTs == ts ? s.Last : double.NaN;
 
     internal static double Quantize(double v, double q) => q >= 1 ? Math.Round(v / q) * q : Math.Round(v, (int)Math.Round(-Math.Log10(q)));
 

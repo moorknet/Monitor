@@ -17,6 +17,22 @@
     "/Data (Read|Written)$": 0
   },
 
+  // "Power & cost" tab. Wall power ≈ (CPU package + GPU board + base_load_w) / psu_efficiency.
+  // provider: "elprisetjustnu" (Swedish spot prices for area SE1-SE4, fetched every 30 min) or "fixed" (any country).
+  // surcharge_per_kwh = grid transfer fee + energy tax + supplier markup (excl. VAT), from your bill.
+  "electricity": {
+    "enabled": true,
+    "provider": "elprisetjustnu",
+    "area": "SE3",
+    "currency": "SEK",
+    "surcharge_per_kwh": 0.0,
+    "vat_pct": 25,
+    "fixed_price_per_kwh": 2.0,
+    "base_load_w": 60,
+    "psu_efficiency": 0.92,
+    "long_retention_days": 730
+  },
+
   // same shape as profiles/*.json limits; wins over profiles for the same role
   "limit_overrides": [
     // { "role": "gpu.hotspot", "warn": 95, "crit": 105, "hysteresis": 2, "min_duration_s": 3, "source": "my tighter limit" }

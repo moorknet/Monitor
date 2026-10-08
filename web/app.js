@@ -26,7 +26,7 @@ const store = {
 const state = {
   dur: store.get('bb.dur', 3600e3), live: true, from: 0, to: 0, agg: store.get('bb.agg', 'max'),
   sel: null, sensors: [], sensorById: new Map(), limitsBySensor: new Map(), events: [], allEvents: [],
-  custom: store.get('bb.custom', []), shutdown: null, charts: new Map(), overview: null, timer: 0, loading: false,
+  tab: 'rec', custom: store.get('bb.custom', []), shutdown: null, charts: new Map(), overview: null, timer: 0, loading: false,
 };
 
 // ---------- utils ----------
@@ -419,7 +419,7 @@ async function refresh() {
 function schedule() {
   clearTimeout(state.timer);
   // live mode only, and never while the tab is hidden
-  if (state.live && !document.hidden) state.timer = setTimeout(refresh, state.dur <= 3600e3 ? 5000 : 30000);
+  if (state.live && !document.hidden && state.tab === 'rec') state.timer = setTimeout(refresh, state.dur <= 3600e3 ? 5000 : 30000);
 }
 
 async function loadMeta() {
@@ -488,7 +488,7 @@ function wire() {
     const row = e.target.closest('.ev');
     if (row) { const ts = +row.dataset.ts; state.sel = { from: ts - 30e3, to: ts + 30e3 }; for (const c of state.charts.values()) c.u?.redraw(false, false); $('#zoomSel').disabled = $('#clearSel').disabled = false; loadPanel(); }
   };
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { refresh(); loadStatus(); } else clearTimeout(state.timer); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (state.tab === 'rec') refresh(); loadStatus(); } else clearTimeout(state.timer); });
   let rt;
   addEventListener('resize', () => {
     clearTimeout(rt);

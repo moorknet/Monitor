@@ -1,6 +1,7 @@
 using System.Net;
 using BlackBox;
 using BlackBox.Db;
+using BlackBox.Energy;
 using BlackBox.Events;
 using BlackBox.Processes;
 using BlackBox.Sensors;
@@ -15,7 +16,9 @@ int genIdx = Array.IndexOf(args, "--generate-history");
 if (genIdx >= 0)
 {
     using var lf = LoggerFactory.Create(b => b.AddSimpleConsole());
-    HistoryGenerator.Run(cfg, double.Parse(args[genIdx + 1], System.Globalization.CultureInfo.InvariantCulture), lf);
+    int edIdx = Array.IndexOf(args, "--energy-days");
+    HistoryGenerator.Run(cfg, double.Parse(args[genIdx + 1], System.Globalization.CultureInfo.InvariantCulture),
+        edIdx >= 0 ? double.Parse(args[edIdx + 1], System.Globalization.CultureInfo.InvariantCulture) : 0, lf);
     return;
 }
 
@@ -39,7 +42,10 @@ builder.WebHost.ConfigureKestrel(o =>
 var s = builder.Services;
 s.AddSingleton(cfg);
 s.AddSingleton<Stats>();
+s.AddSingleton<EnergyMeter>();
 s.AddSingleton<Writer>();
+s.AddSingleton<PriceService>();
+s.AddHostedService(sp => sp.GetRequiredService<PriceService>());
 s.AddSingleton<LimitEvaluator>();
 if (cfg.Simulate || !OperatingSystem.IsWindows())
 {
@@ -91,6 +97,7 @@ log.LogInformation("Startup complete in {ms} ms; data {dir}; http://127.0.0.1:{p
 app.UseDefaultFiles();
 app.UseStaticFiles();
 Api.Map(app, cfg);
+CostApi.Map(app, cfg);
 
 app.Lifetime.ApplicationStopping.Register(() => writer.Event("service_stop", "info", "BlackBox stopped cleanly"));
 app.Lifetime.ApplicationStopped.Register(() =>

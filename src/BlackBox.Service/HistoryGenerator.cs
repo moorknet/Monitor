@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using BlackBox.Db;
+using BlackBox.Energy;
 using BlackBox.Sensors;
 
 namespace BlackBox;
@@ -10,10 +11,11 @@ namespace BlackBox;
 /// </summary>
 public static class HistoryGenerator
 {
-    public static void Run(Config cfg, double hours, ILoggerFactory lf)
+    public static void Run(Config cfg, double hours, double energyDays, ILoggerFactory lf)
     {
         var sw = Stopwatch.StartNew();
-        var w = new Writer(cfg, lf.CreateLogger<Writer>());
+        var meter = new EnergyMeter(cfg);
+        var w = new Writer(cfg, lf.CreateLogger<Writer>(), meter);
         w.Open(false);
         var src = new SimSensorSource();
         var groups = src.Enumerate();
@@ -48,6 +50,7 @@ public static class HistoryGenerator
                 var v = s.Group.Kind == "Derived" ? null : s.Read();
                 if (v is float f) w.AddSample(ts, s.Id, SensorSampler.Quantize(f, s.Quantum));
             }
+            meter.Add(ts, SimSensorSource.CpuPower, SimSensorSource.GpuPower);
             if (tick % cfg.ProcessIntervalS == 0)
             {
                 // ~15 persisted processes + (other), like a real desktop with a game running
@@ -68,8 +71,52 @@ public static class HistoryGenerator
             if (tick % 36000 == 0) Console.WriteLine($"  {(ts - start) / 3600_000.0:0.0} h generated, db {Database.FileSize(cfg.DbPath) / 1048576.0:0} MB");
         }
         w.Flush();
+        if (energyDays * 24 > hours) LongTermEnergy(w, cfg, names[0], names[5], other, start - (long)((energyDays * 24 - hours) * 3600_000), start);
         w.Dispose();
         SimSensorSource.FakeNowMs = null;
         Console.WriteLine($"Generated {hours} h in {sw.Elapsed.TotalSeconds:0} s; rows {w.RowsWritten:N0}; DB {Database.FileSize(cfg.DbPath) / 1048576.0:0.0} MB");
+    }
+
+    /// <summary>Aggregates only (energy per 15 min, per-process energy per hour) for days before the detailed window:
+    /// evening gaming sessions, longer on weekends, the PC sleeping at night.</summary>
+    static void LongTermEnergy(Writer w, Config cfg, ProcKey game, ProcKey dwm, ProcKey other, long from, long to)
+    {
+        var rnd = new Random(3);
+        var em = new EnergyMeter(cfg);
+        w.WithConnection(c =>
+        {
+            int Id(ProcKey k) => Database.Scalar<int>(c, "INSERT INTO procname(name, path) VALUES ($n, NULL) ON CONFLICT(name, path) DO UPDATE SET name=excluded.name RETURNING id", ("$n", k.Name));
+            int gid = Id(game), did = Id(dwm), oid = Id(other);
+            using var tx = c.BeginTransaction();
+            using var eq = c.CreateCommand(); eq.Transaction = tx;
+            eq.CommandText = "INSERT OR REPLACE INTO energy_quarter(ts,cpu_wh,gpu_wh,wall_wh,seconds) VALUES ($t,$c,$g,$w,900)";
+            using var ph = c.CreateCommand(); ph.Transaction = tx;
+            ph.CommandText = "INSERT INTO proc_energy_hour(ts,procname_id,wh) VALUES ($t,$p,$wh) ON CONFLICT(ts,procname_id) DO UPDATE SET wh=wh+excluded.wh";
+            for (long q = from / EnergyMeter.QuarterMs * EnergyMeter.QuarterMs; q < to; q += EnergyMeter.QuarterMs)
+            {
+                var lt = DateTimeOffset.FromUnixTimeMilliseconds(q).ToLocalTime();
+                bool weekend = lt.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+                double h = lt.Hour + lt.Minute / 60.0;
+                bool on = h >= 8 && h < 24 && (weekend || h >= 16);
+                if (!on) continue;                                         // asleep
+                var day = new Random((int)(q / 86_400_000));
+                double gStart = weekend ? 13 + day.Next(0, 4) : 18 + day.NextDouble() * 2, gLen = weekend ? 4 + day.Next(0, 5) : 1.5 + day.NextDouble() * 3;
+                bool gaming = h >= gStart && h < gStart + gLen;
+                double cpu = gaming ? 70 + rnd.NextDouble() * 15 : 30 + rnd.NextDouble() * 8;
+                double gpu = gaming ? 260 + rnd.NextDouble() * 50 : 18 + rnd.NextDouble() * 6;
+                double wall = em.WallWatts(cpu, gpu);
+                eq.Parameters.Clear();
+                eq.Parameters.AddWithValue("$t", q); eq.Parameters.AddWithValue("$c", cpu / 4); eq.Parameters.AddWithValue("$g", gpu / 4); eq.Parameters.AddWithValue("$w", wall / 4);
+                eq.ExecuteNonQuery();
+                long hour = q / 3_600_000 * 3_600_000;
+                void P(int id, double wh) { ph.Parameters.Clear(); ph.Parameters.AddWithValue("$t", hour); ph.Parameters.AddWithValue("$p", id); ph.Parameters.AddWithValue("$wh", wh); ph.ExecuteNonQuery(); }
+                if (gaming) P(gid, (cpu * 0.8 + gpu * 0.95) / 4);
+                P(did, (cpu * 0.03 + gpu * 0.02) / 4);
+                P(oid, (cpu * (gaming ? 0.17 : 0.97) + gpu * (gaming ? 0.03 : 0.98)) / 4);
+            }
+            tx.Commit();
+            return 0;
+        });
+        Console.WriteLine($"Long-term energy written for {(to - from) / 86_400_000.0:0} days");
     }
 }
