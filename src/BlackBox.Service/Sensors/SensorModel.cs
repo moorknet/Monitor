@@ -87,10 +87,13 @@ public static class SensorClassifier
         switch (type)
         {
             case "Temperature":
-                if (cpu && M(name, @"tctl|tdie") && !M(name, "ccd")) return (1, Roles.CpuTctl);
+                // AMD: "Core (Tctl/Tdie)"; Intel: "CPU Package"
+                if (cpu && ((M(name, @"tctl|tdie") && !M(name, "ccd")) || M(name, @"^cpu package$"))) return (1, Roles.CpuTctl);
                 if (cpu && M(name, @"^ccd\s*\d")) return (1, Roles.CpuCcd);
+                if (cpu && M(name, @"^core max$")) return (1, null);                       // Intel hottest core
+                // memory before hotspot: Nvidia calls it "GPU Memory Junction"
+                if (gpu && M(name, @"memory|vram|\bmem\b")) return (1, Roles.GpuMem);
                 if (gpu && M(name, @"hot\s*spot|junction")) return (1, Roles.GpuHotspot);
-                if (gpu && M(name, @"memory|vram|mem")) return (1, Roles.GpuMem);
                 if (gpu && M(name, @"^gpu core$|edge|^gpu$")) return (1, Roles.GpuEdge);
                 if (sio && M(name, "vrm|mos")) return (1, Roles.Vrm);
                 if (sio && M(name, "chipset|pch")) return (2, Roles.Chipset);
@@ -102,7 +105,8 @@ public static class SensorClassifier
                 if (gpu && M(name, "package|board|total|ppt|tbp")) return (1, Roles.GpuPower);
                 return (2, null);
             case "Clock":
-                if (cpu && M(name, @"^core #\d+$")) return (2, Roles.CpuCoreClock);
+                // AMD "Core #1", Intel "CPU Core #1", hybrid Intel "CPU P-Core #1" / "E-Core #1"
+                if (cpu && M(name, @"^(cpu )?([pe]-)?core #\d+$")) return (2, Roles.CpuCoreClock);
                 if (gpu && M(name, @"^gpu core$|^core$|shader|graphics")) return (1, Roles.GpuClock);
                 return (2, null);
             case "Load":
@@ -115,7 +119,7 @@ public static class SensorClassifier
             case "Voltage":
                 if (M(name, @"\+?12\s*v")) return (1, Roles.V12);
                 if (sio && M(name, @"vcore|cpu core")) return (1, Roles.Vcore);
-                if (cpu && M(name, @"^core\b|vddcr_cpu") && !M(name, @"#\d")) return (1, Roles.Vcore);
+                if (cpu && M(name, @"^core\b|^cpu core$|vddcr_cpu") && !M(name, @"#\d")) return (1, Roles.Vcore);
                 if ((sio || cpu) && M(name, @"^v?soc\b|\bsoc\b|vddcr_soc")) return (1, Roles.Vsoc);
                 return (2, null);
             default:
@@ -127,7 +131,10 @@ public static class SensorClassifier
     public static void Resolve(List<HwGroup> groups, IReadOnlyDictionary<string, int> tierOverrides, IReadOnlyDictionary<string, int>? userTiers = null)
     {
         var gpus = groups.Where(g => g.Kind.StartsWith("Gpu")).ToList();
-        var primary = gpus.OrderByDescending(g => M(g.Name, @"\bRX\b|\bRTX\b|\bGTX\b|\bArc\b|\d{4}") ? 1 : 0).FirstOrDefault();
+        // discrete card wins over the iGPU ("AMD Radeon(TM) Graphics", "Intel UHD/Arc Graphics")
+        static int Rank(HwGroup g) => M(g.Name, @"\bRTX\b|\bGTX\b|\bRX\b|Quadro|Radeon Pro") ? 3 : M(g.Name, @"\bArc\b.*\b[AB]\d{3}") ? 2
+            : g.Kind == "GpuNvidia" ? 2 : M(g.Name, @"\(TM\) Graphics|UHD|Iris|Arc\(TM\) Graphics") ? 0 : 1;
+        var primary = gpus.OrderByDescending(Rank).FirstOrDefault();
         foreach (var g in gpus.Where(g => g != primary))
             foreach (var s in g.Sensors.Where(s => s.Role?.StartsWith("gpu.") == true)) { s.Role = null; s.Tier = 2; }
         if (primary != null && !primary.Sensors.Any(s => s.Role == Roles.GpuPower))

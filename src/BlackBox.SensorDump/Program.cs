@@ -70,18 +70,20 @@ void CheckExpected()
     var sensors = all.SelectMany(h => h.Sensors).ToList();
     bool Has(HardwareType hw, SensorType t, string rx) => sensors.Any(s => s.Hardware.HardwareType == hw && s.SensorType == t
         && System.Text.RegularExpressions.Regex.IsMatch(s.Name, rx, System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+    static bool IsGpu(IHardware h) => h.HardwareType is HardwareType.GpuAmd or HardwareType.GpuNvidia or HardwareType.GpuIntel;
+    static bool Regex(string s, string rx) => System.Text.RegularExpressions.Regex.IsMatch(s, rx, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     var checks = new (string what, bool ok)[]
     {
-        ("CPU Tctl/Tdie", Has(HardwareType.Cpu, SensorType.Temperature, "tctl|tdie")),
-        ("CPU CCD temp", Has(HardwareType.Cpu, SensorType.Temperature, "ccd")),
+        ("CPU temperature (Tctl/Tdie or CPU Package)", Has(HardwareType.Cpu, SensorType.Temperature, "tctl|tdie|^cpu package$")),
         ("CPU package power", Has(HardwareType.Cpu, SensorType.Power, "package")),
-        ("GPU (AMD) present", all.Any(h => h.HardwareType == HardwareType.GpuAmd)),
-        ("GPU hotspot temp", Has(HardwareType.GpuAmd, SensorType.Temperature, "hot ?spot|junction")),
-        ("GPU memory temp", Has(HardwareType.GpuAmd, SensorType.Temperature, "memory")),
-        ("GPU power", sensors.Any(s => s.Hardware.HardwareType == HardwareType.GpuAmd && s.SensorType == SensorType.Power)),
-        ("Super I/O present", all.Any(h => h.HardwareType == HardwareType.SuperIO)),
+        ("GPU present", all.Any(IsGpu)),
+        ("GPU core temp", sensors.Any(s => IsGpu(s.Hardware) && s.SensorType == SensorType.Temperature)),
+        ("GPU hotspot temp (not on every card)", sensors.Any(s => IsGpu(s.Hardware) && s.SensorType == SensorType.Temperature && Regex(s.Name, "hot ?spot"))),
+        ("GPU memory temp (not on every card)", sensors.Any(s => IsGpu(s.Hardware) && s.SensorType == SensorType.Temperature && Regex(s.Name, "memory"))),
+        ("GPU power", sensors.Any(s => IsGpu(s.Hardware) && s.SensorType == SensorType.Power)),
+        ("Motherboard sensor chip (Super I/O)", all.Any(h => h.HardwareType == HardwareType.SuperIO)),
         ("Fan RPMs", sensors.Any(s => s.SensorType == SensorType.Fan)),
-        ("VRM temp", sensors.Any(s => s.SensorType == SensorType.Temperature && s.Name.Contains("VRM", StringComparison.OrdinalIgnoreCase))),
+        ("VRM temp (board-specific)", sensors.Any(s => s.SensorType == SensorType.Temperature && Regex(s.Name, "vrm|mos"))),
         ("+12V rail", sensors.Any(s => s.SensorType == SensorType.Voltage && s.Name.Contains("12", StringComparison.Ordinal))),
         ("NVMe temp", Has(HardwareType.Storage, SensorType.Temperature, ".")),
         ("DIMM temp", Has(HardwareType.Memory, SensorType.Temperature, ".")),

@@ -1,0 +1,9 @@
+{
+  "name": "AMD Ryzen X3D",
+  "priority": 12,
+  "hardware_regex": "Ryzen [3579] [57]\\d{3}X3D",
+  "limits": [
+    { "role": "cpu.tctl", "label": "CPU Tctl/Tdie", "warn": 85, "crit": 89, "hysteresis": 2, "min_duration_s": 3, "source": "AMD Tjmax 89–90 °C for 5000/7000 X3D (stacked cache)" },
+    { "role": "cpu.ccd",  "label": "CPU CCD",       "warn": 85, "crit": 89, "hysteresis": 2, "min_duration_s": 3, "source": "AMD Tjmax 89–90 °C for X3D" }
+  ]
+}

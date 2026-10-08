@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlackBox.Service", "src\Bla
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlackBox.SensorDump", "src\BlackBox.SensorDump\BlackBox.SensorDump.csproj", "{AFB9BD86-7B09-40E3-BC6E-DFD215B3B832}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{49316908-03FC-45D2-B393-25E14C104232}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BlackBox.Tests", "tests\BlackBox.Tests\BlackBox.Tests.csproj", "{476AB69F-8698-4DAB-9E53-DEB5531F5D44}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,9 +30,14 @@ Global
 		{AFB9BD86-7B09-40E3-BC6E-DFD215B3B832}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AFB9BD86-7B09-40E3-BC6E-DFD215B3B832}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AFB9BD86-7B09-40E3-BC6E-DFD215B3B832}.Release|Any CPU.Build.0 = Release|Any CPU
+		{476AB69F-8698-4DAB-9E53-DEB5531F5D44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{476AB69F-8698-4DAB-9E53-DEB5531F5D44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{476AB69F-8698-4DAB-9E53-DEB5531F5D44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{476AB69F-8698-4DAB-9E53-DEB5531F5D44}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{3B5622FE-F405-4D19-B52C-A5A009080C08} = {B93BD458-5F65-458E-AB73-F7D8DE8224E2}
 		{AFB9BD86-7B09-40E3-BC6E-DFD215B3B832} = {B93BD458-5F65-458E-AB73-F7D8DE8224E2}
+		{476AB69F-8698-4DAB-9E53-DEB5531F5D44} = {49316908-03FC-45D2-B393-25E14C104232}
 	EndGlobalSection
 EndGlobal

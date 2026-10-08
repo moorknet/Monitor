@@ -1,0 +1,10 @@
+{
+  "name": "AMD Radeon RX",
+  "priority": 10,
+  "hardware_regex": "Radeon (RX|Pro)",
+  "limits": [
+    { "role": "gpu.hotspot",  "label": "GPU junction/hotspot", "warn": 100, "crit": 110, "hysteresis": 2, "min_duration_s": 3, "source": "AMD junction throttle point ~110 °C" },
+    { "role": "gpu.edge",     "label": "GPU edge",             "warn": 85,  "crit": 95,  "hysteresis": 2, "min_duration_s": 3, "source": "Conservative edge limit" },
+    { "role": "gpu.mem_temp", "label": "GPU memory",           "warn": 90,  "crit": 100, "hysteresis": 2, "min_duration_s": 3, "source": "GDDR6 typical max ~105 °C" }
+  ]
+}

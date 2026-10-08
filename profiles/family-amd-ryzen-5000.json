@@ -1,0 +1,8 @@
+{
+  "name": "AMD Ryzen 5000 (Zen 3)",
+  "priority": 10,
+  "hardware_regex": "Ryzen [3579] 5\\d{3}",
+  "limits": [
+    { "role": "cpu.tctl", "label": "CPU Tctl/Tdie", "warn": 85, "crit": 90, "hysteresis": 2, "min_duration_s": 5, "source": "AMD Tjmax 90 °C (Ryzen 5000 desktop)" }
+  ]
+}

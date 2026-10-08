@@ -1,0 +1,8 @@
+{
+  "name": "Intel Core 12th–14th gen",
+  "priority": 10,
+  "hardware_regex": "Core\\(?T?M?\\)? i[3579]-1[234]\\d{3}",
+  "limits": [
+    { "role": "cpu.tctl", "label": "CPU package temp", "warn": 95, "crit": 100, "hysteresis": 2, "min_duration_s": 5, "source": "Intel TjMax 100 °C" }
+  ]
+}

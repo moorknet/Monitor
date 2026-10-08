@@ -38,6 +38,9 @@ jobs:
           "version=$v" >> $env:GITHUB_OUTPUT
           Write-Host "Version $v"
 
+      - name: Test
+        run: dotnet test tests/BlackBox.Tests -c Release
+
       - name: Publish
         shell: pwsh
         run: |

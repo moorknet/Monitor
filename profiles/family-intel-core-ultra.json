@@ -1,0 +1,8 @@
+{
+  "name": "Intel Core Ultra (Series 2 desktop)",
+  "priority": 10,
+  "hardware_regex": "Core\\(?T?M?\\)? Ultra [3579] 2\\d{2}",
+  "limits": [
+    { "role": "cpu.tctl", "label": "CPU package temp", "warn": 100, "crit": 105, "hysteresis": 2, "min_duration_s": 5, "source": "Intel TjMax 105 °C (Arrow Lake)" }
+  ]
+}

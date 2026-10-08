@@ -1,0 +1,10 @@
+{
+  // Zen 4/5 boost until they reach 95 °C by design, so warn only close to the limit and for longer than a few seconds
+  "name": "AMD Ryzen 7000/9000 (Zen 4/5)",
+  "priority": 10,
+  "hardware_regex": "Ryzen [3579] [789]\\d{3}(?!X3D)",
+  "limits": [
+    { "role": "cpu.tctl", "label": "CPU Tctl/Tdie", "warn": 93, "crit": 96, "hysteresis": 2, "min_duration_s": 10, "source": "AMD Tjmax 95 °C; Zen 4/5 run up to 95 °C by design" },
+    { "role": "cpu.ccd",  "label": "CPU CCD",       "warn": 93, "crit": 96, "hysteresis": 2, "min_duration_s": 10, "source": "AMD Tjmax 95 °C" }
+  ]
+}

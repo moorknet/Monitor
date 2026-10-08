@@ -1,0 +1,8 @@
+{
+  "name": "Intel Core (older)",
+  "priority": 5,
+  "hardware_regex": "Core\\(?T?M?\\)? i[3579]-",
+  "limits": [
+    { "role": "cpu.tctl", "label": "CPU package temp", "warn": 90, "crit": 100, "hysteresis": 2, "min_duration_s": 5, "source": "Intel TjMax typically 100 °C" }
+  ]
+}

@@ -53,7 +53,7 @@ function renderElec() {
     field('eFix', `Fixed price per kWh (${cur}, all-inclusive)`, num('eFix', e.fixed_price_per_kwh, 0, 50, 0.01), 'Used only with “Fixed price”.') +
     field('eBase', 'Rest of system (W)', num('eBase', e.base_load_w, 0, 500, 1),
       'Board, RAM, SSDs, fans, pump — everything the CPU/GPU sensors don’t cover. ~40–80 W for a gaming PC at the wall.') +
-    field('eEff', 'PSU efficiency (%)', num('eEff', Math.round(e.psu_efficiency * 100), 50, 100, 1), 'SF1000 (80+ Platinum): ~90–92 % at typical load.');
+    field('eEff', 'PSU efficiency (%)', num('eEff', Math.round(e.psu_efficiency * 100), 50, 100, 1), '80+ Bronze ≈ 85 %, Gold ≈ 90 %, Platinum ≈ 92 %, Titanium ≈ 94 % at typical load (see the PSU label).');
   const sync = () => {
     const p = $('#eProv').value;
     for (const id of ['eArea', 'eCur', 'eSur', 'eVat']) $('#f-' + id).hidden = p === 'fixed';

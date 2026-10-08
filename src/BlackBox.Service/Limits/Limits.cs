@@ -27,6 +27,8 @@ public sealed class Profile
 {
     public string Name { get; set; } = "";
     public string? HardwareRegex { get; set; }   // null = generic fallback profile
+    /// <summary>Higher wins per role: model-specific (20) before family (10) before generic.</summary>
+    public int Priority { get; set; }
     public List<LimitDef> Limits { get; set; } = new();
     public string? File;
 }
@@ -121,7 +123,7 @@ public sealed class LimitEvaluator
         var active = Profiles.Where(p => p.HardwareRegex == null || hwNames.Any(n => Regex.IsMatch(n, p.HardwareRegex, RegexOptions.IgnoreCase))).ToList();
         var ordered = new List<(string profile, LimitDef def)>();
         ordered.AddRange(_cfg.LimitOverrides.Select(d => ("config.json", d)));
-        ordered.AddRange(active.Where(p => p.HardwareRegex != null).SelectMany(p => p.Limits.Select(d => (p.Name, d))));
+        ordered.AddRange(active.Where(p => p.HardwareRegex != null).OrderByDescending(p => p.Priority).SelectMany(p => p.Limits.Select(d => (p.Name, d))));
         ordered.AddRange(active.Where(p => p.HardwareRegex == null).SelectMany(p => p.Limits.Select(d => (p.Name, d))));
         _profileOrdered = ordered.Where(x => x.profile != "config.json").ToList();
 

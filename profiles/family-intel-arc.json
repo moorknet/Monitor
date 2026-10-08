@@ -1,0 +1,8 @@
+{
+  "name": "Intel Arc",
+  "priority": 10,
+  "hardware_regex": "Arc.*[AB]\\d{3}",
+  "limits": [
+    { "role": "gpu.edge", "label": "GPU core", "warn": 90, "crit": 100, "hysteresis": 2, "min_duration_s": 5, "source": "Intel Arc max GPU temp ~100 °C" }
+  ]
+}

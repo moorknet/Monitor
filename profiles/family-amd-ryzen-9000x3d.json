@@ -1,0 +1,8 @@
+{
+  "name": "AMD Ryzen 9000 X3D",
+  "priority": 12,
+  "hardware_regex": "Ryzen [3579] 9\\d{3}X3D",
+  "limits": [
+    { "role": "cpu.tctl", "label": "CPU Tctl/Tdie", "warn": 90, "crit": 95, "hysteresis": 2, "min_duration_s": 5, "source": "AMD Tjmax 95 °C (9000 X3D, cache under the CCD)" }
+  ]
+}

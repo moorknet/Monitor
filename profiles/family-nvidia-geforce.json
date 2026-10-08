@@ -1,0 +1,10 @@
+{
+  "name": "NVIDIA GeForce",
+  "priority": 10,
+  "hardware_regex": "GeForce (RTX|GTX)",
+  "limits": [
+    { "role": "gpu.edge",     "label": "GPU core",            "warn": 83,  "crit": 90,  "hysteresis": 2, "min_duration_s": 5, "source": "NVIDIA boost backs off from ~83 °C; max GPU temp ~90 °C" },
+    { "role": "gpu.hotspot",  "label": "GPU hotspot",         "warn": 100, "crit": 110, "hysteresis": 2, "min_duration_s": 5, "source": "Typical hotspot limit" },
+    { "role": "gpu.mem_temp", "label": "GPU memory junction", "warn": 95,  "crit": 105, "hysteresis": 2, "min_duration_s": 5, "source": "GDDR6X throttles at ~110 °C" }
+  ]
+}

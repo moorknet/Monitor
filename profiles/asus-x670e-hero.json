@@ -1,5 +1,6 @@
 {
   "name": "ASUS ROG Crosshair X670E Hero",
+  "priority": 20,
   "hardware_regex": "CROSSHAIR X670E HERO",
   "limits": [
     { "role": "mb.vrm", "label": "VRM (Super I/O)", "warn": 90, "crit": 105, "hysteresis": 2, "min_duration_s": 5, "source": "Typical MOSFET rating" },

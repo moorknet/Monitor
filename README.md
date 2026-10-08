@@ -27,6 +27,31 @@ maintenance burden for no gain in speed or footprint. **RDNA4 is the one item to
 the milestone-1 dump tool (below). If GPU sensors are missing, the clean fallback is a small ADLX reader for the GPU
 only, with everything else staying on LHM.
 
+## Supported hardware
+
+BlackBox is built for one machine (7800X3D / RX 9070 XT / X670E Hero), but it works on any Windows 10/11 PC that
+[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) supports. Sensors are recognised by the
+names LHM gives them, so no setup is needed for:
+
+| Vendor | Recognised | Limit profile |
+|---|---|---|
+| AMD Ryzen | Tctl/Tdie, CCD temps, package power, core clocks/loads, Vcore/SoC | Ryzen 5000 (90 °C), 7000/9000 (95 °C, runs hot by design), X3D 5000/7000 (89 °C), 9000 X3D (95 °C) |
+| Intel Core | CPU Package temp + power, P-/E-core clocks, Vcore | 12th–14th gen (100 °C), Core Ultra 200 (105 °C), older Core i (100 °C) |
+| NVIDIA GeForce | core, hotspot (when the card exposes it), memory junction, board power | core 83/90 °C, hotspot 100/110, memory 95/105 |
+| AMD Radeon RX | edge, hotspot, memory, board power | hotspot 100/110, edge 85/95, memory 90/100 |
+| Intel Arc | core temp, power | 90/100 °C |
+| Motherboards | Nuvoton / ITE / Fintek chips: fans, +12 V, Vcore, and VRM/chipset temps when the board names them | VRM 90/105, chipset, +12 V ±5 %, CPU fan stall |
+| NVMe / DDR5 | composite temp, SPD hub temp | 70/80 °C, 75/85 °C |
+
+The discrete graphics card is chosen over the integrated one automatically. Unknown hardware falls back to generic limits.
+Anything that misreports can be switched off in **Settings**, and every limit can be changed there.
+`BlackBox.SensorDump.exe` prints an OK/MISS checklist for a new machine. Electricity prices cover Sweden (SE1–SE4); outside
+Sweden, pick *Fixed price* in Settings.
+
+**Installing on a friend's PC:** download the zip from the [latest release](https://github.com/moorknet/Monitor/releases/latest),
+extract it, run `.\install.ps1` as administrator (it installs the PawnIO driver too), open http://127.0.0.1:8787 → **Settings** and pick
+your price area. Updates arrive through the banner after that.
+
 ## Install
 
 **Easiest (no SDK needed):** download `BlackBox-<version>-win-x64.zip` from the
@@ -204,6 +229,7 @@ Cost API: `/api/cost/summary`, `/api/cost/hourly`, `/api/cost/daily?days=30`, `/
 
 ```bash
 dotnet build BlackBox.sln -c Release
+dotnet test tests/BlackBox.Tests -c Release   # sensor classification + limit profiles for Intel/AMD/NVIDIA/Radeon
 # run anywhere with synthetic hardware (web UI on :8787)
 dotnet src/BlackBox.Service/bin/Release/net8.0-windows/BlackBox.dll --simulate --data ./data
 # write N hours of synthetic history (size / startup / query benchmarks)

@@ -1,5 +1,6 @@
 {
   "name": "AMD Ryzen 7 7800X3D",
+  "priority": 20,
   "hardware_regex": "Ryzen 7 7800X3D",
   "limits": [
     { "role": "cpu.tctl", "label": "CPU Tctl/Tdie", "warn": 85, "crit": 89, "hysteresis": 2, "min_duration_s": 3, "source": "AMD Tjmax 89 °C for X3D" },
