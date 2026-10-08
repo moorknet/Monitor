@@ -94,3 +94,4 @@ dialog input[type=search] { width: 100%; margin-bottom: 8px; cursor: text; }
 .update .notes ul { margin: 4px 0; padding-left: 18px; }
 .update progress { width: 180px; vertical-align: middle; }
 .update button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cost-err { margin: 10px 6px; padding: 8px 12px; border: 1px solid var(--crit); background: #2a1215; border-radius: 4px; grid-column: 1 / -1; }

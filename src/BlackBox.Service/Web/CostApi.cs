@@ -42,7 +42,7 @@ public static class CostApi
         cmd.CommandText = "SELECT ts, cpu_wh, gpu_wh, wall_wh, seconds FROM energy_quarter WHERE ts >= $f AND ts < $t ORDER BY ts";
         cmd.Parameters.AddWithValue("$f", from); cmd.Parameters.AddWithValue("$t", to);
         using var r = cmd.ExecuteReader();
-        while (r.Read()) list.Add(new Quarter(r.GetInt64(0), r.GetDouble(1), r.GetDouble(2), r.GetDouble(3), r.GetDouble(4)));
+        while (r.Read()) list.Add(new Quarter(r.GetInt64(0), D(r, 1), D(r, 2), D(r, 3), D(r, 4)));
         return list;
     }
 
@@ -53,7 +53,7 @@ public static class CostApi
         cmd.CommandText = "SELECT ts, ts_end, spot FROM price WHERE ts_end > $f AND ts < $t ORDER BY ts";
         cmd.Parameters.AddWithValue("$f", from); cmd.Parameters.AddWithValue("$t", to);
         using var r = cmd.ExecuteReader();
-        while (r.Read()) p.Rows.Add((r.GetInt64(0), r.GetInt64(1), r.GetDouble(2)));
+        while (r.Read()) if (!r.IsDBNull(2)) p.Rows.Add((r.GetInt64(0), r.GetInt64(1), r.GetDouble(2)));
         return p;
     }
 
@@ -77,7 +77,8 @@ public static class CostApi
         };
     }
 
-    static double R(double v, int d) => Math.Round(v, d);
+    static double R(double v, int d) => double.IsFinite(v) ? Math.Round(v, d) : 0;
+    static double D(SqliteDataReader r, int i) => r.IsDBNull(i) ? 0 : r.GetDouble(i);
 
     public static void Map(WebApplication app, Config cfg)
     {
@@ -245,7 +246,7 @@ public static class CostApi
         {
             string name = r.GetString(0);
             long ts = r.GetInt64(1);
-            double kwh = r.GetDouble(2) / 1000 / eff;
+            double kwh = D(r, 2) / 1000 / eff;
             // hour's average price (mean of its quarter prices)
             double sum = 0; int n = 0;
             for (long q = ts; q < ts + 3_600_000; q += EnergyMeter.QuarterMs)

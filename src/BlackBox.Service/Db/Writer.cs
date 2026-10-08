@@ -95,6 +95,9 @@ public sealed class Writer : IDisposable
         return stmt;
     }
 
+    // NaN/Infinity would be stored as NULL, and NULL + x = NULL would poison the additive rollups forever
+    static void BindD(sqlite3_stmt st, int i, double v) => raw.sqlite3_bind_double(st, i, double.IsFinite(v) ? v : 0);
+
     void Step(sqlite3_stmt st)
     {
         int rc = raw.sqlite3_step(st);
@@ -190,7 +193,7 @@ public sealed class Writer : IDisposable
                 ref var r = ref _samplesOut[i];
                 raw.sqlite3_bind_int64(_insSample, 1, r.Ts);
                 raw.sqlite3_bind_int(_insSample, 2, r.SensorId);
-                raw.sqlite3_bind_double(_insSample, 3, r.Value);
+                BindD(_insSample, 3, r.Value);
                 Step(_insSample);
                 if (r.Ts > maxTs) maxTs = r.Ts;
             }
@@ -200,9 +203,9 @@ public sealed class Writer : IDisposable
                 if (r.Key.Id == 0) r.Key.Id = ProcNameId(r.Key);
                 var st = _insProc;
                 raw.sqlite3_bind_int64(st, 1, r.Ts); raw.sqlite3_bind_int(st, 2, r.Pid); raw.sqlite3_bind_int(st, 3, r.Key.Id);
-                raw.sqlite3_bind_double(st, 4, Math.Round(r.Cpu, 2)); raw.sqlite3_bind_double(st, 5, Math.Round(r.Gpu, 2));
-                raw.sqlite3_bind_double(st, 6, Math.Round(r.WsMb)); raw.sqlite3_bind_double(st, 7, Math.Round(r.IoBps));
-                raw.sqlite3_bind_double(st, 8, Math.Round(r.EstCpuW, 2)); raw.sqlite3_bind_double(st, 9, Math.Round(r.EstGpuW, 2));
+                BindD(st, 4, Math.Round(r.Cpu, 2)); BindD(st, 5, Math.Round(r.Gpu, 2));
+                BindD(st, 6, Math.Round(r.WsMb)); BindD(st, 7, Math.Round(r.IoBps));
+                BindD(st, 8, Math.Round(r.EstCpuW, 2)); BindD(st, 9, Math.Round(r.EstGpuW, 2));
                 Step(st);
                 ref var m = ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(_minutes, (r.Ts / 60_000 * 60_000, r.Key.Id), out _);
                 m.N++; m.CpuSum += r.Cpu; m.GpuSum += r.Gpu; m.IoSum += r.IoBps; m.CwSum += r.EstCpuW; m.GwSum += r.EstGpuW;
@@ -216,27 +219,27 @@ public sealed class Writer : IDisposable
             {
                 var st = _upMinute;
                 raw.sqlite3_bind_int64(st, 1, mts); raw.sqlite3_bind_int(st, 2, mid); raw.sqlite3_bind_int64(st, 3, m.N);
-                raw.sqlite3_bind_double(st, 4, Math.Round(m.CpuSum, 2)); raw.sqlite3_bind_double(st, 5, Math.Round(m.CpuMax, 2));
-                raw.sqlite3_bind_double(st, 6, Math.Round(m.GpuSum, 2)); raw.sqlite3_bind_double(st, 7, Math.Round(m.GpuMax, 2));
-                raw.sqlite3_bind_double(st, 8, Math.Round(m.WsMax)); raw.sqlite3_bind_double(st, 9, Math.Round(m.IoSum));
-                raw.sqlite3_bind_double(st, 10, Math.Round(m.CwSum, 2)); raw.sqlite3_bind_double(st, 11, Math.Round(m.GwSum, 2));
-                raw.sqlite3_bind_double(st, 12, Math.Round(m.WMax, 2));
+                BindD(st, 4, Math.Round(m.CpuSum, 2)); BindD(st, 5, Math.Round(m.CpuMax, 2));
+                BindD(st, 6, Math.Round(m.GpuSum, 2)); BindD(st, 7, Math.Round(m.GpuMax, 2));
+                BindD(st, 8, Math.Round(m.WsMax)); BindD(st, 9, Math.Round(m.IoSum));
+                BindD(st, 10, Math.Round(m.CwSum, 2)); BindD(st, 11, Math.Round(m.GwSum, 2));
+                BindD(st, 12, Math.Round(m.WMax, 2));
                 Step(st);
             }
             _minutes.Clear();
             foreach (var ((hts, hid), wh) in _procHourWh)
             {
                 raw.sqlite3_bind_int64(_upProcHour, 1, hts); raw.sqlite3_bind_int(_upProcHour, 2, hid);
-                raw.sqlite3_bind_double(_upProcHour, 3, wh);
+                BindD(_upProcHour, 3, wh);
                 Step(_upProcHour);
             }
             _procHourWh.Clear();
             for (int i = 0; i < nEn; i++)
             {
                 ref var e = ref _energy[i];
-                raw.sqlite3_bind_int64(_upEnergy, 1, e.Ts); raw.sqlite3_bind_double(_upEnergy, 2, e.CpuWh);
-                raw.sqlite3_bind_double(_upEnergy, 3, e.GpuWh); raw.sqlite3_bind_double(_upEnergy, 4, e.WallWh);
-                raw.sqlite3_bind_double(_upEnergy, 5, e.Seconds);
+                raw.sqlite3_bind_int64(_upEnergy, 1, e.Ts); BindD(_upEnergy, 2, e.CpuWh);
+                BindD(_upEnergy, 3, e.GpuWh); BindD(_upEnergy, 4, e.WallWh);
+                BindD(_upEnergy, 5, e.Seconds);
                 Step(_upEnergy);
             }
             int nE = 0;

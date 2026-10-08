@@ -365,12 +365,17 @@ public static class Api
         // ---- /api/status ----
         app.MapGet("/api/status", (Stats st, Writer wr, LimitEvaluator le, SensorSampler sampler) =>
         {
-            long size = Database.FileSize(cfg.DbPath);
+            long size = Database.FileSize(cfg.DbPath), used;
             long oldest;
             using (var c = Read())
+            {
                 oldest = Database.Scalar<long?>(c, "SELECT MIN(m) FROM (SELECT (SELECT MIN(ts) FROM sample WHERE sensor_id = s.id) AS m FROM sensor s)") ?? 0;
+                // logical data size (includes committed-but-not-checkpointed pages); the -wal file itself is reused space
+                used = (Database.Scalar<long>(c, "PRAGMA page_count") - Database.Scalar<long>(c, "PRAGMA freelist_count")) * Database.Scalar<long>(c, "PRAGMA page_size");
+            }
             double coveredH = oldest > 0 ? (Now - oldest) / 3600_000.0 : 0;
-            double projMb = coveredH > 0.25 ? size / 1048576.0 * cfg.RetentionHours / Math.Min(coveredH, cfg.RetentionHours) : double.NaN;
+            // needs an hour of history before the extrapolation means anything
+            double projMb = coveredH >= 1 ? used / 1048576.0 * cfg.RetentionHours / Math.Min(coveredH, cfg.RetentionHours) : double.NaN;
             var roles = sampler.Groups.SelectMany(g => g.Sensors).Where(s => s.Role != null).GroupBy(s => s.Role!)
                 .ToDictionary(g => g.Key, g => g.Count());
             return Results.Json(new
@@ -386,7 +391,7 @@ public static class Api
                 proc_last_ms = Round(st.LastProcMs), proc_max_ms = Round(st.MaxProcMs), processes = st.ProcCount,
                 commit_last_ms = Round(wr.LastCommitMs), commit_max_ms = Round(wr.MaxCommitMs), commits = wr.Commits, rows_written = wr.RowsWritten,
                 sample_lag_ms = wr.LastSampleTsCommitted > 0 ? Now - wr.LastSampleTsCommitted : (long?)null,
-                db_mb = Round(size / 1048576.0), db_budget_mb = cfg.DbBudgetMb, db_covered_h = Round(coveredH), db_projected_mb = Round(projMb),
+                db_mb = Round(size / 1048576.0), db_data_mb = Round(used / 1048576.0), db_budget_mb = cfg.DbBudgetMb, db_covered_h = Round(coveredH), db_projected_mb = Round(projMb),
                 retention_h = cfg.RetentionHours, last_retention = wr.LastRetention,
                 sensors = st.SensorCount, tier1 = st.StoredTier1, tier2 = st.StoredTier2,
                 roles, profiles = le.ActiveProfiles, db_reset = wr.ResetReason,

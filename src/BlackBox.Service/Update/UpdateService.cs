@@ -19,7 +19,9 @@ public sealed class UpdateService : BackgroundService
     readonly Config _cfg;
     readonly Db.Writer _writer;
     readonly ILogger _log;
-    readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(10) };
+    readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(10) };      // release download
+    readonly HttpClient _api = new() { Timeout = TimeSpan.FromSeconds(20) };       // release check / checksum
+    static readonly bool CanInstall = DetectService();
     readonly SemaphoreSlim _busy = new(1, 1);
 
     public static Version Current { get; } = Normalize(Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0));
@@ -35,9 +37,15 @@ public sealed class UpdateService : BackgroundService
     public UpdateService(Config cfg, Db.Writer writer, ILogger<UpdateService> log)
     {
         _cfg = cfg; _writer = writer; _log = log;
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd($"BlackBox-updater/{Current}");
-        _http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        foreach (var h in new[] { _http, _api }) h.DefaultRequestHeaders.UserAgent.ParseAdd($"BlackBox-updater/{Current}");
+        _api.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         ReadLastResult();
+    }
+
+    static bool DetectService()
+    {
+        try { return OperatingSystem.IsWindows() && Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService(); }
+        catch { return false; }
     }
 
     static Version Normalize(Version v) => new(v.Major, v.Minor, Math.Max(0, v.Build));
@@ -60,7 +68,7 @@ public sealed class UpdateService : BackgroundService
         try
         {
             Status = "checking"; Error = null;
-            using var res = await _http.GetAsync($"https://api.github.com/repos/{_cfg.Update.Repo}/releases/latest", ct);
+            using var res = await _api.GetAsync($"https://api.github.com/repos/{_cfg.Update.Repo}/releases/latest", ct);
             if (res.StatusCode == System.Net.HttpStatusCode.NotFound) { Latest = null; Status = "idle"; LastCheck = DateTime.UtcNow; return; } // no releases yet
             res.EnsureSuccessStatusCode();
             using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
@@ -83,7 +91,8 @@ public sealed class UpdateService : BackgroundService
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Status = "error"; Error = "Update check failed: " + ex.Message;
+            Status = "error";
+            Error = "Update check failed: " + (ex is TaskCanceledException ? "GitHub did not answer within 20 s (network/firewall/proxy for the service account?)" : ex.Message);
             LastCheck = DateTime.UtcNow;
             _log.LogWarning("Update check failed: {msg}", ex.Message);
         }
@@ -94,8 +103,7 @@ public sealed class UpdateService : BackgroundService
     public string? StartApply()
     {
         if (!Available || Latest == null) return "No update available.";
-        bool asService = OperatingSystem.IsWindows() && Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService();
-        bool dryRun = !asService;   // console/simulated runs only stage the update (nothing to swap safely)
+        bool dryRun = !CanInstall;   // console/simulated runs only stage the update (nothing to swap safely)
         if (!_busy.Wait(0)) return "An update operation is already running.";
         var rel = Latest;
         _ = Task.Run(async () =>
@@ -111,7 +119,7 @@ public sealed class UpdateService : BackgroundService
                 Status = "verifying";
                 if (rel.ShaUrl != null)
                 {
-                    var expected = (await _http.GetStringAsync(rel.ShaUrl)).Trim().Split(' ', '\t')[0].ToLowerInvariant();
+                    var expected = (await _api.GetStringAsync(rel.ShaUrl)).Trim().Split(' ', '\t')[0].ToLowerInvariant();
                     string actual;
                     await using (var fs = File.OpenRead(zipPath)) actual = Convert.ToHexString(await SHA256.HashDataAsync(fs)).ToLowerInvariant();
                     if (actual != expected) throw new InvalidDataException($"checksum mismatch (expected {expected[..12]}…, got {actual[..12]}…)");
@@ -196,8 +204,8 @@ public sealed class UpdateService : BackgroundService
         available = Available,
         latest = Latest == null ? null : new { version = Latest.Version.ToString(), tag = Latest.Tag, name = Latest.Name, notes = Latest.Notes, url = Latest.Url, published = Latest.Published, size_mb = Math.Round(Latest.Size / 1048576.0, 1) },
         status = Status, error = Error, progress = Progress, last_check = LastCheck, last_result = LastResult,
-        can_install = OperatingSystem.IsWindows() && Microsoft.Extensions.Hosting.WindowsServices.WindowsServiceHelpers.IsWindowsService(),
+        can_install = CanInstall,
     };
 
-    public override void Dispose() { _http.Dispose(); base.Dispose(); }
+    public override void Dispose() { _http.Dispose(); _api.Dispose(); base.Dispose(); }
 }

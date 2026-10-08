@@ -134,21 +134,35 @@ async function renderPrice(d) {
     (tomorrow ? '' : 'Tomorrow’s prices appear around 13:00.');
 }
 
+function costError(where, e) {
+  console.error(where, e);
+  return `<div class="cost-err"><b>${esc(where)} failed:</b> ${esc(e.message || e)}<br><span class="muted">Details are in C:\\ProgramData\\BlackBox\\logs\\blackbox.log</span></div>`;
+}
+
 async function loadCost() {
+  // each part renders independently, so one failing request can't blank the whole tab
+  let d = null;
   try {
-    const d = await api('/api/cost/summary');
+    d = await api('/api/cost/summary');
     cost.data = d;
-    const s = d.settings;
-    renderTiles(d); renderFacts(d); renderTables(d);
-    await renderPrice(d);
-    const now = Date.now();
+  } catch (e) { $('#tiles').innerHTML = costError('Loading the cost summary', e); }
+  if (d) {
+    for (const [name, fn] of [['Tiles', renderTiles], ['Fun facts', renderFacts], ['Tables', renderTables]])
+      try { fn(d); } catch (e) { $('#facts').insertAdjacentHTML('beforeend', `<li>${costError(name, e)}</li>`); }
+    try { await renderPrice(d); } catch (e) { $('#priceChart').innerHTML = costError('Price chart', e); }
+  }
+  const s = d?.settings || { currency: 'SEK' };
+  const now = Date.now();
+  try {
     const hours = await api(`/api/cost/hourly?from=${now - 48 * 3600e3}&to=${now}`);
     mount('hour', barsOpts('Cost', 200, null, s, v => v == null ? '–' : money(v, s)),
       [hours.map(h => h.ts + 1800e3), hours.map(h => h.cost)], $('#hourChart'));
+  } catch (e) { $('#hourChart').innerHTML = costError('Hourly cost', e); }
+  try {
     const days = await api('/api/cost/daily?days=30');
     mount('day', barsOpts('Cost', 200, (u, v) => v.map(t => { const x = new Date(t); return `${x.getDate()}/${x.getMonth() + 1}`; }), s, v => v == null ? '–' : money(v, s)),
       [days.map(x => x.ts + 43200e3), days.map(x => x.cost)], $('#dayChart'));
-  } catch (e) { console.error(e); }
+  } catch (e) { $('#dayChart').innerHTML = costError('Daily cost', e); }
   clearTimeout(cost.timer);
   if (state.tab === 'cost' && !document.hidden) cost.timer = setTimeout(loadCost, 60e3);
 }

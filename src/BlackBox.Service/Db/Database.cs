@@ -75,6 +75,9 @@ public static class Database
         Exec(c, Schema);
         // schema migration for DBs created before 'role' existed
         try { Exec(c, "ALTER TABLE sensor ADD COLUMN role TEXT"); } catch (SqliteException) { }
+        // repair rows an earlier build could have poisoned with NULL (NaN bound as REAL)
+        Exec(c, "UPDATE energy_quarter SET cpu_wh=IFNULL(cpu_wh,0), gpu_wh=IFNULL(gpu_wh,0), wall_wh=IFNULL(wall_wh,0), seconds=IFNULL(seconds,0) WHERE cpu_wh IS NULL OR gpu_wh IS NULL OR wall_wh IS NULL OR seconds IS NULL;" +
+                "UPDATE proc_energy_hour SET wh=0 WHERE wh IS NULL;");
         return c;
     }
 

@@ -9,7 +9,6 @@
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <TieredPGO>false</TieredPGO>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <UseSystemResourceKeys>true</UseSystemResourceKeys>
     <EventSourceSupport>false</EventSourceSupport>
     <!-- LHM + System.Management use reflection/COM: trimming is not safe, see README -->
     <PublishTrimmed>false</PublishTrimmed>

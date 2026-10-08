@@ -105,7 +105,13 @@ app.Use(async (ctx, next) =>
     var host = ctx.Request.Host.Host;
     if (host is not ("127.0.0.1" or "localhost" or "[::1]")) { ctx.Response.StatusCode = 421; return; }
     if (HttpMethods.IsPost(ctx.Request.Method) && ctx.Request.Headers["X-BlackBox"] != "1") { ctx.Response.StatusCode = 403; return; }
-    await next();
+    try { await next(); }
+    catch (Exception ex) when (ctx.Request.Path.StartsWithSegments("/api") && !ctx.Response.HasStarted)
+    {
+        log.LogError(ex, "API {path} failed", ctx.Request.Path);
+        ctx.Response.StatusCode = 500;
+        await ctx.Response.WriteAsJsonAsync(new { error = $"{ex.GetType().Name}: {ex.Message}", path = ctx.Request.Path.Value });
+    }
 });
 app.UseDefaultFiles();
 app.UseStaticFiles();

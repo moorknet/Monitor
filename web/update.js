@@ -3,11 +3,18 @@
 
 const upd = { timer: 0, info: null, installing: false, flash: null };
 
-async function updFetch(path, post) {
-  const r = await fetch(path, post ? { method: 'POST', headers: { 'X-BlackBox': '1' } } : { cache: 'no-store' });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error || r.status);
-  return j;
+async function updFetch(path, post, timeoutMs = 30000) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const r = await fetch(path, { method: post ? 'POST' : 'GET', headers: post ? { 'X-BlackBox': '1' } : {}, cache: 'no-store', signal: ac.signal });
+    let j = null;
+    try { j = await r.json(); } catch { }
+    if (!r.ok) throw new Error(`HTTP ${r.status}${j?.error ? ': ' + j.error : ''}`);
+    if (!j) throw new Error('empty response');
+    return j;
+  } catch (e) {
+    throw e.name === 'AbortError' ? new Error(`no answer from the service within ${timeoutMs / 1000} s`) : e;
+  } finally { clearTimeout(t); }
 }
 
 function notesHtml(md) {
@@ -25,11 +32,12 @@ function notesHtml(md) {
 
 function renderUpdate() {
   const u = upd.info, bar = $('#updateBar');
-  if (!u) return;
-  $('#version').textContent = `v${u.current}`;
+  $('#version').textContent = u ? `v${u.current}` : 'v?';
   bar.className = 'update';
-  const busy = ['downloading', 'verifying', 'applying'].includes(u.status);
+  if (!u && !upd.flash) return;
+  const busy = !!u && ['downloading', 'verifying', 'applying'].includes(u.status);
   if (upd.flash) { bar.hidden = false; bar.className = 'update ' + (upd.flash.ok ? 'ok' : 'bad'); bar.innerHTML = `<div class="row1"><span class="msg">${upd.flash.html}</span><button id="updClose">Close</button></div>`; }
+  else if (!u) return;
   else if (busy || upd.installing) {
     const step = { downloading: `Downloading… <progress max="100" value="${u.progress}"></progress> ${fmt(u.progress, 0)}%`, verifying: 'Verifying checksum…',
       applying: 'Installing — the service restarts now; recording pauses for a few seconds and this page reloads by itself.' }[u.status] || 'Restarting…';
@@ -56,7 +64,9 @@ function renderUpdate() {
 
 async function pollUpdate() {
   clearTimeout(upd.timer);
-  try { upd.info = await updFetch('/api/update'); renderUpdate(); } catch { }
+  try { upd.info = await updFetch('/api/update'); }
+  catch (e) { if (!upd.info) upd.flash = { ok: false, html: `Update status unavailable: ${esc(e.message)}` }; }
+  renderUpdate();
   if (!document.hidden) upd.timer = setTimeout(pollUpdate, upd.installing ? 1000 : 10 * 60e3);
 }
 
@@ -97,10 +107,11 @@ $('#version').onclick = async () => {
   try {
     upd.info = await updFetch('/api/update/check', true);
     store.set('bb.updLater', '');
+    upd.flash = null;
     if (!upd.info.available) upd.flash = upd.info.status === 'error'
       ? { ok: false, html: esc(upd.info.error) }
       : { ok: true, html: `✔ BlackBox ${esc(upd.info.current)} is up to date${upd.info.latest ? '' : ' (no releases published yet)'}.` };
-  } catch (e) { upd.flash = { ok: false, html: esc(e.message) }; }
+  } catch (e) { upd.flash = { ok: false, html: `Update check failed: ${esc(e.message)}` }; }
   renderUpdate();
 };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pollUpdate(); else clearTimeout(upd.timer); });

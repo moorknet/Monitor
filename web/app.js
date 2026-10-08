@@ -46,7 +46,11 @@ const fmt = (v, d = 1) => v == null || Number.isNaN(v) ? '–' : Number(v).toFix
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 async function api(path) {
   const r = await fetch(path, { cache: 'no-store' });
-  if (!r.ok) throw new Error(`${path}: ${r.status}`);
+  if (!r.ok) {
+    let msg = '';
+    try { msg = (await r.json()).error || ''; } catch { }
+    throw new Error(`${path.split('?')[0]} → HTTP ${r.status}${msg ? ': ' + msg : ''}`);
+  }
   return r.json();
 }
 function shortHw(s) {

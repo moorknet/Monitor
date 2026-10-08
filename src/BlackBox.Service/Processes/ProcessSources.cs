@@ -149,7 +149,7 @@ public sealed unsafe class PdhGpu : IDisposable
             uint cstatus = *(uint*)(item + 8);
             if (cstatus > 1) continue; // PDH_CSTATUS_VALID_DATA / NEW_DATA only
             double v = *(double*)(item + 16);
-            if (v <= 0) continue;
+            if (!(v > 0) || !double.IsFinite(v)) continue; // also drops NaN
             var name = MemoryMarshal.CreateReadOnlySpanFromNullTerminated(*(char**)item);
             // "pid_1234_luid_0x..._phys_0_eng_0_engtype_3D"
             int e = name.IndexOf("engtype_");
