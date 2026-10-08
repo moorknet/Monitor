@@ -3,14 +3,17 @@
 
 const $ = s => document.querySelector(s);
 const PALETTE = ['#4e9cff', '#ff8a3d', '#3ddc97', '#e45b78', '#b48cff', '#ffd24d', '#4dd8e6', '#ff6fd8', '#9bd35a', '#c9ced6'];
-const MARKER_KINDS = new Set(['power_loss', 'kernel_power_41', 'unexpected_shutdown', 'bugcheck', 'whea', 'gpu_tdr', 'limit_breach',
-  'throttle', 'sensor_reset', 'db_reset', 'thermal', 'cpu_firmware_limit', 'service_start', 'shutdown_initiated', 'slow_tick']);
+// vertical markers only for what matters when diagnosing a crash; everything else stays in the event list / Jump menu
+const MARKER_KINDS = new Set(['power_loss', 'kernel_power_41', 'unexpected_shutdown', 'bugcheck', 'whea', 'gpu_tdr', 'throttle',
+  'sensor_reset', 'db_reset', 'thermal', 'cpu_firmware_limit']);
+const markerShown = e => MARKER_KINDS.has(e.kind) || (e.kind === 'limit_breach' && e.severity === 'crit');
 const JUMP_KINDS = new Set(['power_loss', 'kernel_power_41', 'unexpected_shutdown', 'bugcheck', 'whea', 'gpu_tdr', 'limit_breach',
   'throttle', 'sensor_reset', 'db_reset', 'thermal', 'cpu_firmware_limit']);
 
 const CHARTS = [
   { id: 'power', title: 'Power (W)', roles: ['cpu.package_power', 'gpu.board_power', 'power.total'] },
-  { id: 'temps', title: 'Temperatures (°C)', roles: ['cpu.tctl', 'cpu.ccd', 'gpu.hotspot', 'gpu.edge', 'gpu.mem_temp', 'mb.vrm', 'nvme.temp', 'mb.chipset', 'dimm.temp'] },
+  // the few temperatures that matter per component; 'a|b' = first role that exists (cards without a hotspot sensor show the core)
+  { id: 'temps', title: 'Temperatures (°C)', roles: ['cpu.tctl', 'gpu.hotspot|gpu.edge', 'gpu.mem_temp', 'mb.vrm', 'nvme.max'] },
   { id: 'load', title: 'Load (%) & clocks (MHz)', roles: ['cpu.load', 'cpu.core_load_max', 'gpu.load', 'cpu.clock_max', 'cpu.clock_avg', 'gpu.clock'] },
   { id: 'fans', title: 'Fans (RPM)', filter: s => s.type === 'Fan' },
   { id: 'volts', title: 'Voltages (V)', roles: ['mb.12v', 'mb.vcore', 'mb.vsoc'], scaleOf: s => s.role === 'mb.12v' ? '12 V' : 'V' },
@@ -102,7 +105,7 @@ function overlayPlugin(getSeriesLimits) {
         }
         // event markers
         for (const e of state.events) {
-          if (!MARKER_KINDS.has(e.kind)) continue;
+          if (!markerShown(e)) continue;
           const px = x(e.ts);
           if (px < left || px > left + width) continue;
           ctx.strokeStyle = e.severity === 'crit' ? '#e5484d' : e.severity === 'warn' ? '#f5a524' : '#6b7480';
@@ -177,7 +180,12 @@ function chartSensors(def) {
   if (def.custom) return state.custom.map(id => state.sensorById.get(id)).filter(Boolean);
   if (def.filter) return state.sensors.filter(s => def.filter(s) && s.tier !== 0);
   const out = [];
-  for (const r of def.roles) for (const s of state.sensors) if (s.role === r) out.push(s);
+  for (const alts of def.roles) {
+    for (const r of alts.split('|')) {
+      const hit = state.sensors.filter(s => s.role === r && s.tier !== 0);
+      if (hit.length) { out.push(...hit); break; }
+    }
+  }
   return out;
 }
 

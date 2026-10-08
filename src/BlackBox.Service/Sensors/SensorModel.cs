@@ -10,7 +10,7 @@ public static class Roles
         CpuCoreLoadMax = "cpu.core_load_max", Vcore = "mb.vcore", Vsoc = "mb.vsoc", V12 = "mb.12v",
         GpuPower = "gpu.board_power", GpuEdge = "gpu.edge", GpuHotspot = "gpu.hotspot", GpuMem = "gpu.mem_temp",
         GpuClock = "gpu.clock", GpuLoad = "gpu.load", Vrm = "mb.vrm", Chipset = "mb.chipset",
-        Fan = "fan", FanCpu = "fan.cpu", Nvme = "nvme.temp", Dimm = "dimm.temp", PowerTotal = "power.total";
+        Fan = "fan", FanCpu = "fan.cpu", Nvme = "nvme.temp", NvmeMax = "nvme.max", Dimm = "dimm.temp", PowerTotal = "power.total";
 }
 
 public sealed class SensorDesc
@@ -84,6 +84,8 @@ public static class SensorClassifier
     public static (int tier, string? role) Classify(string hwKind, string hwName, string type, string name)
     {
         bool cpu = hwKind == "Cpu", gpu = hwKind.StartsWith("Gpu"), sio = hwKind is "SuperIO" or "EmbeddedController" or "Motherboard";
+        // constants some devices report as "sensors" (RAM SPD hub: "Thermal Sensor High Limit", "Temperature Sensor Resolution")
+        if (M(name, @"\blimit\b|resolution|threshold")) return (0, null);
         switch (type)
         {
             case "Temperature":

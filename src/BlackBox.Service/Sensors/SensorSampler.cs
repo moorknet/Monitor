@@ -18,8 +18,9 @@ public sealed class SensorSampler : BackgroundService
     SensorDesc[] _coreClocks = [], _coreLoads = [];
     SensorDesc? _cpuPower, _gpuPower, _gpuLoad;
     readonly HwGroup _derived;
-    readonly SensorDesc _dClkMax, _dClkAvg, _dLoadMax, _dPowerTotal;
-    double _vClkMax = double.NaN, _vClkAvg = double.NaN, _vLoadMax = double.NaN, _vPowerTotal = double.NaN;
+    readonly SensorDesc _dClkMax, _dClkAvg, _dLoadMax, _dPowerTotal, _dNvmeMax;
+    double _vClkMax = double.NaN, _vClkAvg = double.NaN, _vLoadMax = double.NaN, _vPowerTotal = double.NaN, _vNvmeMax = double.NaN;
+    SensorDesc[] _nvme = [];
     long _tick, _lastReset, _lastSlowEvent;
 
     public IReadOnlyList<HwGroup> Groups => _groups;
@@ -44,6 +45,9 @@ public sealed class SensorSampler : BackgroundService
         _dClkAvg = D("cpu_clock_avg", "CPU core clock (avg)", "Clock", Roles.CpuClockAvg, () => _vClkAvg);
         _dLoadMax = D("cpu_core_load_max", "CPU core load (max)", "Load", Roles.CpuCoreLoadMax, () => _vLoadMax);
         _dPowerTotal = D("power_total", "CPU + GPU power", "Power", Roles.PowerTotal, () => _vPowerTotal);
+        // one line for all drives in the temperatures chart; drives update every Tier2EveryS, so store it at that rate too
+        _dNvmeMax = D("nvme_max", "Hottest NVMe", "Temperature", Roles.NvmeMax, () => _vNvmeMax);
+        _dNvmeMax.Tier = 2;
         _derived.HasTier1 = true;
     }
 
@@ -68,6 +72,7 @@ public sealed class SensorSampler : BackgroundService
         var all = groups.SelectMany(g => g.Sensors).ToList();
         _coreClocks = all.Where(s => s.Role == Roles.CpuCoreClock && s.Tier != 0).ToArray();
         _coreLoads = all.Where(s => s.Role == Roles.CpuCoreLoad && s.Tier != 0).ToArray();
+        _nvme = all.Where(s => s.Role == Roles.Nvme && s.Tier != 0).ToArray();
         _cpuPower = all.FirstOrDefault(s => s.Role == Roles.CpuPower);
         _gpuPower = all.FirstOrDefault(s => s.Role == Roles.GpuPower);
         _gpuLoad = all.FirstOrDefault(s => s.Role == Roles.GpuLoad);
@@ -117,7 +122,7 @@ public sealed class SensorSampler : BackgroundService
             ReadGroup(g, ts, tier2);
         }
 
-        ComputeDerived();
+        ComputeDerived(ts);
         ReadGroup(_derived, ts, tier2);
         _limits.Evaluate(ts);
         _energy.Add(ts, Fresh(_cpuPower, ts), Fresh(_gpuPower, ts));
@@ -159,8 +164,11 @@ public sealed class SensorSampler : BackgroundService
 
     internal static double Quantize(double v, double q) => q >= 1 ? Math.Round(v / q) * q : Math.Round(v, (int)Math.Round(-Math.Log10(q)));
 
-    void ComputeDerived()
+    void ComputeDerived(long ts)
     {
+        double nmax = double.NaN;
+        foreach (var s in _nvme) if (ts - s.LastTs < 30_000 && !(s.Last <= nmax)) nmax = s.Last;
+        _vNvmeMax = nmax;
         double max = double.NaN, sum = 0; int n = 0;
         foreach (var s in _coreClocks)
             if (!double.IsNaN(s.Last)) { sum += s.Last; n++; if (!(s.Last <= max)) max = s.Last; }

@@ -94,6 +94,17 @@ public class HardwareCompatTests
         Assert.Null(groups[0].Sensors.Single(s => s.Type == "Temperature").Role);
     }
 
+    [Fact]
+    public void Ram_spd_constants_are_not_recorded_as_temperatures()
+    {
+        var groups = new List<HwGroup> { G("/ram", "Generic Memory", "Memory", ("Temperature", "DIMM #0"), ("Temperature", "Thermal Sensor High Limit"),
+            ("Temperature", "Thermal Sensor Critical High Limit"), ("Temperature", "Temperature Sensor Resolution"), ("Temperature", "Thermal Sensor Low Limit")) };
+        SensorClassifier.Resolve(groups, new Dictionary<string, int>());
+        var dimm = groups[0].Sensors[0];
+        Assert.Equal((2, BlackBox.Sensors.Roles.Dimm), (dimm.Tier, dimm.Role));
+        Assert.All(groups[0].Sensors.Skip(1), s => Assert.Equal((0, (string?)null), (s.Tier, s.Role)));
+    }
+
     [Theory]
     [InlineData("Intel Core i7-13700K", "cpu.tctl", 95.0, 100.0)]       // 12th-14th gen beats the older-Intel family
     [InlineData("Intel Core Ultra 7 265K", "cpu.tctl", 100.0, 105.0)]
