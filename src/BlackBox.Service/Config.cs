@@ -23,6 +23,9 @@ public sealed class Config
     /// <summary>User limits; same shape as profile limits, override profile entries with the same role.</summary>
     public List<LimitDef> LimitOverrides { get; set; } = new();
 
+    /// <summary>Settings tab: LHM sensor identifier → tier (0 = off, 1 = 1 Hz, 2 = every Tier2EveryS). Wins over everything.</summary>
+    public Dictionary<string, int> SensorTiers { get; set; } = new();
+
     public ElectricityConfig Electricity { get; set; } = new();
     public UpdateConfig Update { get; set; } = new();
 
@@ -49,6 +52,34 @@ public sealed class Config
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
+    [JsonIgnore] public string ConfigPath => Path.Combine(DataPath, "config.json");
+    static readonly object SaveLock = new();
+
+    /// <summary>
+    /// Patch config.json in place: only the keys the Settings tab owns are replaced, everything else in the file
+    /// (hand-written tier_overrides, port, …) is kept. Comments are not preserved. Written atomically.
+    /// </summary>
+    public void Save()
+    {
+        lock (SaveLock)
+        {
+            var docOpts = new System.Text.Json.JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+            var root = File.Exists(ConfigPath)
+                ? System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(ConfigPath), documentOptions: docOpts) as System.Text.Json.Nodes.JsonObject ?? new()
+                : new System.Text.Json.Nodes.JsonObject();
+            var el = JsonSerializer.SerializeToNode(Electricity, Json)!.AsObject();
+            if (Electricity.Provider == "sim" && Electricity.FileProvider != null) el["provider"] = Electricity.FileProvider;
+            root["electricity"] = el;
+            root["update"] = JsonSerializer.SerializeToNode(Update, Json);
+            root["retention_hours"] = RetentionHours;
+            root["sensor_tiers"] = JsonSerializer.SerializeToNode(SensorTiers, Json);
+            root["limit_overrides"] = JsonSerializer.SerializeToNode(LimitOverrides, Json);
+            var tmp = ConfigPath + ".tmp";
+            File.WriteAllText(tmp, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }));
+            File.Move(tmp, ConfigPath, true);
+        }
+    }
+
     public static Config Load(string[] args)
     {
         // config.json lives in the data dir; BLACKBOX_DATA / --data override the location.
@@ -61,7 +92,10 @@ public sealed class Config
         if (args.Contains("--simulate") || !OperatingSystem.IsWindows()) cfg.Simulate = true;
         // no network assumptions when simulating: synthetic prices unless the config forces a provider via BLACKBOX_REAL_PRICES
         if (cfg.Simulate && cfg.Electricity.Provider == "elprisetjustnu" && Environment.GetEnvironmentVariable("BLACKBOX_REAL_PRICES") == null)
+        {
+            cfg.Electricity.FileProvider = cfg.Electricity.Provider;
             cfg.Electricity.Provider = "sim";
+        }
         for (int i = 0; i < args.Length - 1; i++) if (args[i] == "--port") cfg.Port = int.Parse(args[i + 1]);
         Directory.CreateDirectory(cfg.DataPath);
         Directory.CreateDirectory(cfg.LogDir);
@@ -88,6 +122,9 @@ public sealed class ElectricityConfig
     public double PsuEfficiency { get; set; } = 0.92;
     /// <summary>Energy, price and per-process energy history is kept this long (the 72 h limit is for raw samples only).</summary>
     public int LongRetentionDays { get; set; } = 730;
+
+    /// <summary>Provider as written in config.json when --simulate replaced it with "sim" (so saving keeps the user's choice).</summary>
+    [JsonIgnore] public string? FileProvider { get; set; }
 
     public double Total(double spot) => Provider == "fixed" ? FixedPricePerKwh : (spot + SurchargePerKwh) * (1 + VatPct / 100);
 }

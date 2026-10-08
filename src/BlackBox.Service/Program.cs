@@ -117,6 +117,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 Api.Map(app, cfg);
 CostApi.Map(app, cfg);
+SettingsApi.Map(app, cfg);
 app.MapGet("/api/update", (BlackBox.Update.UpdateService u) => Results.Json(u.Json(), Config.Json));
 app.MapPost("/api/update/check", async (BlackBox.Update.UpdateService u) => { await u.Check(); return Results.Json(u.Json(), Config.Json); });
 app.MapPost("/api/update/apply", (BlackBox.Update.UpdateService u) =>

@@ -19,7 +19,7 @@ public static class HistoryGenerator
         w.Open(false);
         var src = new SimSensorSource();
         var groups = src.Enumerate();
-        SensorClassifier.Resolve(groups, cfg.TierOverrides);
+        SensorClassifier.Resolve(groups, cfg.TierOverrides, cfg.SensorTiers);
         w.Register(groups);
         var sensors = groups.SelectMany(g => g.Sensors).ToList();
         var cpu = groups.First(g => g.Kind == "Cpu");

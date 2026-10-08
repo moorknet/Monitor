@@ -87,6 +87,17 @@ public sealed class LimitEvaluator
     long _thrSince, _thrStart;
     bool _throttling;
 
+    List<(string profile, LimitDef def)> _profileOrdered = new();
+
+    /// <summary>The profile limit a sensor would get without config overrides (Settings tab "reset" and defaults).</summary>
+    public (string profile, LimitDef def)? ProfileDefault(SensorDesc s, string? role)
+    {
+        foreach (var (profile, d) in _profileOrdered)
+            if (d.SensorRegex != null ? Regex.IsMatch(s.Group.Name + "/" + s.Name, d.SensorRegex, RegexOptions.IgnoreCase) : d.Role != null && d.Role == role)
+                return (profile, d);
+        return null;
+    }
+
     public LimitEvaluator(Config cfg, Writer writer, ILogger<LimitEvaluator> log)
     {
         _cfg = cfg; _writer = writer; _log = log;
@@ -112,10 +123,12 @@ public sealed class LimitEvaluator
         ordered.AddRange(_cfg.LimitOverrides.Select(d => ("config.json", d)));
         ordered.AddRange(active.Where(p => p.HardwareRegex != null).SelectMany(p => p.Limits.Select(d => (p.Name, d))));
         ordered.AddRange(active.Where(p => p.HardwareRegex == null).SelectMany(p => p.Limits.Select(d => (p.Name, d))));
+        _profileOrdered = ordered.Where(x => x.profile != "config.json").ToList();
 
         var bound = new List<BoundLimit>();
         foreach (var s in sensors)
         {
+            if (s.Tier == 0) continue; // switched off in Settings
             foreach (var (profile, d) in ordered)
             {
                 bool match = d.SensorRegex != null

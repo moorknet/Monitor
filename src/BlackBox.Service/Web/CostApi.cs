@@ -35,14 +35,20 @@ public static class CostApi
     static long LocalMs(DateTime local) => new DateTimeOffset(local, TimeZoneInfo.Local.GetUtcOffset(local)).ToUnixTimeMilliseconds();
     static DateTime ToLocal(long ms) => TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(ms), TimeZoneInfo.Local).DateTime;
 
-    static List<Quarter> LoadQuarters(SqliteConnection c, long from, long to)
+    static List<Quarter> LoadQuarters(SqliteConnection c, long from, long to, ElectricityConfig e)
     {
         var list = new List<Quarter>();
         using var cmd = c.CreateCommand();
         cmd.CommandText = "SELECT ts, cpu_wh, gpu_wh, wall_wh, seconds FROM energy_quarter WHERE ts >= $f AND ts < $t ORDER BY ts";
         cmd.Parameters.AddWithValue("$f", from); cmd.Parameters.AddWithValue("$t", to);
         using var r = cmd.ExecuteReader();
-        while (r.Read()) list.Add(new Quarter(r.GetInt64(0), D(r, 1), D(r, 2), D(r, 3), D(r, 4)));
+        double eff = Math.Clamp(e.PsuEfficiency, 0.5, 1.0);
+        while (r.Read())
+        {
+            // wall energy is derived here (not the stored wall_wh) so base-load / PSU-efficiency edits re-price history
+            double cpu = D(r, 1), gpu = D(r, 2), sec = D(r, 4);
+            list.Add(new Quarter(r.GetInt64(0), cpu, gpu, (cpu + gpu + e.BaseLoadW * sec / 3600) / eff, sec));
+        }
         return list;
     }
 
@@ -100,7 +106,7 @@ public static class CostApi
             long month = LocalMs(new DateTime(localNow.Year, localNow.Month, 1));
             long week = now - 7 * 86_400_000L, d30 = now - 30 * 86_400_000L, all = now - cfg.LongRetentionMs;
             using var c = Read();
-            var qs = LoadQuarters(c, all, now + 1);
+            var qs = LoadQuarters(c, all, now + 1, e);
             var px = LoadPrices(c, all, now + 2 * 86_400_000L);
 
             var periods = new (string key, long from, long to)[]
@@ -181,7 +187,7 @@ public static class CostApi
             long from = long.TryParse(ctx.Request.Query["from"], out var ff) ? ff : to - 48 * 3_600_000L;
             from = from / 3_600_000 * 3_600_000;
             using var c = Read();
-            var qs = LoadQuarters(c, from, to);
+            var qs = LoadQuarters(c, from, to, e);
             var px = LoadPrices(c, from, to);
             var hours = new SortedDictionary<long, Agg>();
             foreach (var q in qs)
@@ -200,7 +206,7 @@ public static class CostApi
             var localNow = ToLocal(Now);
             long from = LocalMs(localNow.Date.AddDays(-(days - 1)));
             using var c = Read();
-            var qs = LoadQuarters(c, from, Now + 1);
+            var qs = LoadQuarters(c, from, Now + 1, e);
             var px = LoadPrices(c, from, Now + 1);
             var map = new SortedDictionary<DateTime, Agg>();
             for (int i = 0; i < days; i++) map[localNow.Date.AddDays(-(days - 1) + i)] = new Agg();

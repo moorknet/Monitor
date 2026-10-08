@@ -18,6 +18,18 @@ public sealed class PriceService : BackgroundService
     readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
     public static readonly TimeZoneInfo MarketTz = FindTz();
 
+    readonly SemaphoreSlim _kick = new(0, 1);
+    /// <summary>Settings changed: re-check now instead of waiting for the 30 min tick.</summary>
+    public void Refresh() { if (_kick.CurrentCount == 0) _kick.Release(); }
+
+    /// <summary>Area/currency/provider changed: stored prices are for the old source, drop them and refetch.</summary>
+    public void ResetPrices()
+    {
+        _writer.WithConnection(c => { Db.Database.Exec(c, "DELETE FROM price"); return 0; });
+        LastError = null;
+        Refresh();
+    }
+
     public DateTime? LastFetchUtc { get; private set; }
     public string? LastError { get; private set; }
 
@@ -36,15 +48,16 @@ public sealed class PriceService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
-        if (!_cfg.Enabled || _cfg.Provider == "fixed") return;
         await Task.Delay(TimeSpan.FromSeconds(5), ct);
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(30));
-        do
+        while (!ct.IsCancellationRequested)
         {
-            try { await Update(ct); }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { LastError = ex.Message; _log.LogWarning(ex, "Price update failed"); }
-        } while (await timer.WaitForNextTickAsync(ct));
+            if (_cfg.Enabled && _cfg.Provider != "fixed")
+                try { await Update(ct); }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { LastError = ex.Message; _log.LogWarning(ex, "Price update failed"); }
+            // every 30 min, or right away when the Settings tab changes the price source
+            await _kick.WaitAsync(TimeSpan.FromMinutes(30), ct);
+        }
     }
 
     async Task Update(CancellationToken ct)

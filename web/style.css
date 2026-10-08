@@ -95,3 +95,28 @@ dialog input[type=search] { width: 100%; margin-bottom: 8px; cursor: text; }
 .update progress { width: 180px; vertical-align: middle; }
 .update button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .cost-err { margin: 10px 6px; padding: 8px 12px; border: 1px solid var(--crit); background: #2a1215; border-radius: 4px; grid-column: 1 / -1; }
+
+/* settings */
+.settings { padding: 12px 16px 80px; display: grid; gap: 12px; max-width: 1200px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; }
+.card h2 { font-size: 14px; margin: 2px 0 8px; }
+.form { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 16px; }
+.field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 3px; }
+.field input, .field select { width: 100%; box-sizing: border-box; cursor: auto; }
+.field .help { color: var(--muted); font-size: 11px; margin-top: 2px; }
+input[type=number], input[type=text], .field select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; font: inherit; }
+input[type=number] { font-variant-numeric: tabular-nums; }
+.changed { outline: 1px solid var(--warn); }
+tr.dirty td { background: rgba(245,165,36,0.08); }
+tr.off td { color: var(--muted); }
+tr.hwrow td { background: var(--panel2); font-weight: 600; text-align: left !important; }
+.set-sensors td:nth-child(3), .set-sensors td:nth-child(4) { font-variant-numeric: tabular-nums; }
+.set-sensors select { padding: 2px 6px; }
+.flag { color: var(--warn); cursor: help; }
+.lim input[type=number] { width: 72px; padding: 2px 6px; }
+.linkbtn { background: none; border: none; color: var(--accent); padding: 0 4px; cursor: pointer; }
+.savebar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 10px; align-items: center; padding: 10px 16px;
+  background: var(--panel); border-top: 1px solid var(--warn); box-shadow: 0 -4px 16px rgba(0,0,0,.4); z-index: 5; }
+.savebar.ok { border-top-color: var(--ok); } .savebar.bad { border-top-color: var(--crit); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.row input[type=search] { min-width: 220px; }

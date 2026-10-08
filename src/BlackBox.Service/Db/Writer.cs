@@ -156,10 +156,10 @@ public sealed class Writer : IDisposable
                     """, ("$k", g.Kind), ("$n", g.Name), ("$i", g.Identifier));
                 foreach (var s in g.Sensors)
                     s.Id = Database.Scalar<int>(_c, """
-                        INSERT INTO sensor(hardware_id, identifier, name, type, unit, tier, role) VALUES ($h,$i,$n,$t,$u,$tier,$r)
+                        INSERT INTO sensor(hardware_id, identifier, name, type, unit, tier, role, visible) VALUES ($h,$i,$n,$t,$u,$tier,$r,$v)
                         ON CONFLICT(identifier) DO UPDATE SET hardware_id=excluded.hardware_id, name=excluded.name, type=excluded.type,
-                          unit=excluded.unit, tier=excluded.tier, role=excluded.role RETURNING id
-                        """, ("$h", g.Id), ("$i", s.Identifier), ("$n", s.Name), ("$t", s.Type), ("$u", s.Unit), ("$tier", s.Tier), ("$r", s.Role));
+                          unit=excluded.unit, tier=excluded.tier, role=excluded.role, visible=excluded.visible RETURNING id
+                        """, ("$h", g.Id), ("$i", s.Identifier), ("$n", s.Name), ("$t", s.Type), ("$u", s.Unit), ("$tier", s.Tier), ("$r", s.Role), ("$v", s.Tier == 0 ? 0 : 1));
             }
             tx.Commit();
         }

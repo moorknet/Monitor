@@ -91,6 +91,24 @@ To run as a console app (for debugging), stop the service and run `BlackBox.exe`
 - **Sensors…** builds the Custom chart from any recorded sensor. **Export CSV** saves the selection, or the visible range,
   as a wide CSV.
 
+## Settings tab
+
+Everything below can be changed in the viewer (**Settings**). Changes apply immediately, with no restart, and are saved to
+`C:\ProgramData\BlackBox\config.json`. Only the keys the tab owns are rewritten; anything else you added by hand stays,
+but comments in the file are not kept.
+
+- **Electricity & running cost:** price source (Nord Pool spot by area, or a fixed price), currency, surcharge (grid fee +
+  energy tax + markup), VAT, rest-of-system watts and PSU efficiency, with a live preview of the wall power and cost per hour.
+  Wall energy is worked out from the stored CPU/GPU watt-hours when you view it, so these settings re-price your whole history.
+  Changing the price area, currency or source refetches prices.
+- **Sensors:** per sensor, *Every second*, *Every 10 s* or *Off*. Off stops recording the sensor and removes it from charts,
+  limits, derived values and the cost meter. If it had a job (e.g. CPU temperature or GPU power), another suitable sensor takes
+  over when one exists. ⚠ flags live readings that are physically implausible (0 °C, negative RPM, +12 V far from 12 V, …),
+  which usually means a misreporting sensor. Saved as `sensor_tiers` (LHM identifier → 0/1/2).
+- **Limits:** warn/crit per limit (± % for the 12 V rail, CPU temperature threshold for the fan-stall check), with ↺ to
+  return to the hardware profile default. Saved as `limit_overrides`.
+- **General:** how many hours of detailed history to keep, and the automatic update check.
+
 ## Updates
 
 Every push to the default branch triggers `.github/workflows/release.yml` on a Windows runner. Docs-only changes are skipped.

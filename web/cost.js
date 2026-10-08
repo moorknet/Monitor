@@ -171,10 +171,11 @@ function showTab(tab) {
   state.tab = tab;
   store.set('bb.tab', tab);
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  $('#tab-rec').hidden = tab !== 'rec';
-  $('#tab-cost').hidden = tab !== 'cost';
+  for (const t of ['rec', 'cost', 'settings']) $('#tab-' + t).hidden = tab !== t;
   clearTimeout(cost.timer); clearTimeout(state.timer);
+  if (typeof settingsTab === 'function') settingsTab(tab === 'settings');
   if (tab === 'cost') loadCost();
+  else if (tab === 'settings') { /* settings.js loads itself */ }
   else {
     const w = chartWidth();
     for (const c of state.charts.values()) c.u?.setSize({ width: w, height: c.u.height });
@@ -186,4 +187,5 @@ function showTab(tab) {
 document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state.tab === 'cost') loadCost(); else if (document.hidden) clearTimeout(cost.timer); });
 addEventListener('resize', () => { if (state.tab === 'cost') { clearTimeout(cost.rt); cost.rt = setTimeout(loadCost, 200); } });
-if (store.get('bb.tab', 'rec') === 'cost') showTab('cost');
+// restored after settings.js has loaded (it defines settingsTab)
+addEventListener('load', () => { const t = store.get('bb.tab', 'rec'); if (t !== 'rec') showTab(t); });

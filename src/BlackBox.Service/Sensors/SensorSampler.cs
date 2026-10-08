@@ -48,6 +48,10 @@ public sealed class SensorSampler : BackgroundService
     }
 
     /// <summary>Synchronous first enumeration so the API and process sampler see sensors before the loop starts.</summary>
+    volatile bool _rebuild;
+    /// <summary>Re-apply tiers/roles/limits from config on the next tick (Settings tab).</summary>
+    public void RequestRebuild() => _rebuild = true;
+
     public void Initialize()
     {
         _log.LogInformation("Sensor backend: {d}", _source.DriverInfo);
@@ -59,11 +63,11 @@ public sealed class SensorSampler : BackgroundService
         var sw = Stopwatch.StartNew();
         var groups = _source.Enumerate();
         groups.Add(_derived);
-        SensorClassifier.Resolve(groups, _cfg.TierOverrides);
+        SensorClassifier.Resolve(groups, _cfg.TierOverrides, _cfg.SensorTiers);
         _writer.Register(groups);
         var all = groups.SelectMany(g => g.Sensors).ToList();
-        _coreClocks = all.Where(s => s.Role == Roles.CpuCoreClock).ToArray();
-        _coreLoads = all.Where(s => s.Role == Roles.CpuCoreLoad).ToArray();
+        _coreClocks = all.Where(s => s.Role == Roles.CpuCoreClock && s.Tier != 0).ToArray();
+        _coreLoads = all.Where(s => s.Role == Roles.CpuCoreLoad && s.Tier != 0).ToArray();
         _cpuPower = all.FirstOrDefault(s => s.Role == Roles.CpuPower);
         _gpuPower = all.FirstOrDefault(s => s.Role == Roles.GpuPower);
         _gpuLoad = all.FirstOrDefault(s => s.Role == Roles.GpuLoad);
@@ -95,6 +99,7 @@ public sealed class SensorSampler : BackgroundService
         bool tier2 = _tick++ % _cfg.Tier2EveryS == 0;
 
         if (_source.Changed) { _log.LogInformation("Hardware/sensor set changed; re-enumerating"); Build(); }
+        else if (_rebuild) { _rebuild = false; _log.LogInformation("Settings changed; re-applying sensor tiers and limits"); Build(); }
 
         bool needReset = false;
         var groups = _groups;

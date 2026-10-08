@@ -14,6 +14,7 @@
   <nav class="tabs" id="tabs">
     <button data-tab="rec" class="on">Recorder</button>
     <button data-tab="cost">Power &amp; cost</button>
+    <button data-tab="settings">Settings</button>
   </nav>
   <div id="status" class="status" title="Service self-measurement (/api/status)">…</div>
   <button id="version" class="chip" title="Check for updates">v…</button>
@@ -88,6 +89,44 @@
   </div>
 </div>
 
+<div id="tab-settings" hidden>
+  <div class="settings">
+    <section class="card">
+      <h2>Electricity &amp; running cost</h2>
+      <div class="form" id="setElec"></div>
+      <p class="note" id="setElecPreview"></p>
+    </section>
+    <section class="card">
+      <h2>Sensors</h2>
+      <p class="note">Turn off sensors that misreport. <b>Off</b> stops recording them and removes them from charts, limits and the cost
+        calculation; if the sensor had a job (e.g. CPU temperature) another suitable sensor takes over when one exists.
+        <span class="flag">⚠</span> marks a live value that looks implausible.</p>
+      <div class="row">
+        <input id="setFilter" type="search" placeholder="filter sensors…" autocomplete="off">
+        <label class="chk"><input type="checkbox" id="setOnlyChanged"> only changed / off</label>
+        <label class="chk"><input type="checkbox" id="setOnlyFlagged"> only ⚠</label>
+      </div>
+      <table class="t set-sensors" id="setSensors"></table>
+    </section>
+    <section class="card">
+      <h2>Limits</h2>
+      <p class="note">Warn/crit thresholds used for breach events, chart lines and the verdicts. Defaults come from the hardware profiles.</p>
+      <table class="t" id="setLimits"></table>
+    </section>
+    <section class="card">
+      <h2>General</h2>
+      <div class="form" id="setGeneral"></div>
+      <p class="note" id="setPath"></p>
+    </section>
+  </div>
+  <div class="savebar" id="saveBar" hidden>
+    <span id="saveMsg">Unsaved changes</span>
+    <span class="spacer"></span>
+    <button id="discardBtn">Discard</button>
+    <button id="saveBtn" class="primary">Save &amp; apply</button>
+  </div>
+</div>
+
 <dialog id="picker">
   <form method="dialog">
     <h2>Custom chart sensors</h2>
@@ -101,5 +140,6 @@
 <script src="app.js"></script>
 <script src="cost.js"></script>
 <script src="update.js"></script>
+<script src="settings.js"></script>
 </body>
 </html>

@@ -23,6 +23,8 @@ public sealed class SensorDesc
     public required Func<float?> Read { get; init; }
     public int Tier { get; set; } = 2;               // 0 = not stored, 1 = every tick, 2 = every Tier2EveryS
     public string? Role { get; set; }
+    public int DefaultTier { get; set; } = 2;        // before the user's Settings override
+    public string? DefaultRole { get; set; }
     public double Quantum { get; init; } = 0.01;
     public int Id { get; set; }                       // sensor.id in DB
 
@@ -122,7 +124,7 @@ public static class SensorClassifier
     }
 
     /// <summary>Post-pass over all groups: pick one discrete GPU for gpu.* roles; ensure a board-power role exists.</summary>
-    public static void Resolve(List<HwGroup> groups, IReadOnlyDictionary<string, int> tierOverrides)
+    public static void Resolve(List<HwGroup> groups, IReadOnlyDictionary<string, int> tierOverrides, IReadOnlyDictionary<string, int>? userTiers = null)
     {
         var gpus = groups.Where(g => g.Kind.StartsWith("Gpu")).ToList();
         var primary = gpus.OrderByDescending(g => M(g.Name, @"\bRX\b|\bRTX\b|\bGTX\b|\bArc\b|\d{4}") ? 1 : 0).FirstOrDefault();
@@ -144,9 +146,32 @@ public static class SensorClassifier
             foreach (var s in groups.SelectMany(g => g.Sensors))
                 if (re.IsMatch(s.Identifier) || re.IsMatch(s.Group.Name + "/" + s.Name)) s.Tier = tier;
         }
+        foreach (var s in groups.SelectMany(g => g.Sensors)) { s.DefaultTier = s.Tier; s.DefaultRole = s.Role; }
+
+        // Settings tab: per-sensor tier by LHM identifier. Off (0) also drops the role, so a misreporting sensor
+        // stops feeding charts, limits, derived values and the energy meter; a fallback takes its role if one exists.
+        if (userTiers != null)
+            foreach (var s in groups.SelectMany(g => g.Sensors))
+                if (userTiers.TryGetValue(s.Identifier, out var t) && t is >= 0 and <= 2)
+                {
+                    s.Tier = t;
+                    if (t == 0) s.Role = null;
+                }
+        if (primary != null && !groups.SelectMany(g => g.Sensors).Any(s => s.Role == Roles.GpuPower))
+        {
+            var p = primary.Sensors.FirstOrDefault(s => s.Type == "Power" && s.Tier != 0);
+            if (p != null) { p.Role = Roles.GpuPower; if (p.Tier == 2 && userTiers?.ContainsKey(p.Identifier) != true) p.Tier = 1; }
+        }
+        if (!groups.SelectMany(g => g.Sensors).Any(s => s.Role == Roles.CpuTctl))
+        {
+            var t = groups.Where(g => g.Kind == "Cpu").SelectMany(g => g.Sensors)
+                .FirstOrDefault(s => s.Type == "Temperature" && s.Tier != 0 && M(s.Name, "tctl|tdie|package|ccd"));
+            if (t != null) t.Role = Roles.CpuTctl;
+        }
+
         foreach (var g in groups)
         {
-            g.HasTier1 = g.Sensors.Any(s => s.Tier == 1 || s.Role == Roles.CpuCoreClock || s.Role == Roles.CpuCoreLoad);
+            g.HasTier1 = g.Sensors.Any(s => s.Tier == 1 || (s.Tier != 0 && (s.Role == Roles.CpuCoreClock || s.Role == Roles.CpuCoreLoad)));
             g.HasTier2 = g.Sensors.Any(s => s.Tier == 2);
         }
     }
