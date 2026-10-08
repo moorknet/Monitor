@@ -8,5 +8,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <InvariantGlobalization>true</InvariantGlobalization>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- CI publishes releases as 0.2.<run number> via -p:Version=...; local builds are 0.2.0 -->
+    <VersionPrefix>0.2.0</VersionPrefix>
   </PropertyGroup>
 </Project>

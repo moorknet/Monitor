@@ -29,7 +29,10 @@ only, with everything else staying on LHM.
 
 ## Install
 
-Run this in an elevated PowerShell on the target machine (needs the .NET 8 SDK for `-Build`, or a prebuilt `publish\` folder):
+**Easiest (no SDK needed):** download `BlackBox-<version>-win-x64.zip` from the
+[latest release](https://github.com/moorknet/Monitor/releases/latest), extract it, and run `.\install.ps1` in an elevated PowerShell.
+
+**From source:** run this in an elevated PowerShell on the target machine (needs the .NET 8 SDK for `-Build`, or a prebuilt `publish\` folder):
 
 ```powershell
 git clone https://github.com/moorknet/Monitor.git; cd Monitor
@@ -87,6 +90,30 @@ To run as a console app (for debugging), stop the service and run `BlackBox.exe`
   All tier-1 sensors are shown at full 1 Hz, with a table of last/min/max values and the processes active at the time.
 - **Sensors…** builds the Custom chart from any recorded sensor. **Export CSV** saves the selection, or the visible range,
   as a wide CSV.
+
+## Updates
+
+Every push to the default branch triggers `.github/workflows/release.yml` on a Windows runner. Docs-only changes are skipped.
+The workflow builds the service and SensorDump and publishes a GitHub Release `v0.2.<run number>`. Each release has a zip,
+a `.sha256` checksum and release notes made from the commit messages.
+
+The installed service checks the latest release every 6 h (`update.check_hours`) with one unauthenticated call to
+`api.github.com`. When a newer version exists, the viewer shows a banner with **What's new**, **Update now** and **Later**.
+Click the version chip in the header to check right away.
+
+**Update now** does the following:
+1. The service downloads the zip to `C:\ProgramData\BlackBox\updates`, checks its SHA-256 and extracts it.
+2. It starts the **new** `BlackBox.exe --apply-update` from the staging folder, as a separate process.
+3. That updater stops the service, backs up `C:\Program Files\BlackBox` to `updates\backup` and copies the new files in.
+4. It starts the service and waits for `/api/status` to report the new version.
+5. If the new version doesn't come up within 60 s, it restores the backup and starts the old version again.
+6. The result appears in the viewer and as an `update_installed` / `update_failed` event. Details go to `logs\update.log`.
+
+Recording pauses for about 10–30 s during an update. Settings and recorded data in `C:\ProgramData\BlackBox` are untouched.
+
+The web UI only accepts `Host: 127.0.0.1` / `localhost`, which blocks DNS rebinding. Its POST endpoints require an
+`X-BlackBox: 1` header, which another website's page cannot send, so a random site you visit cannot trigger an update.
+To turn updates off, set `"update": { "enabled": false }` in `config.json`.
 
 ## Power & cost tab
 

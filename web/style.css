@@ -82,3 +82,15 @@ dialog input[type=search] { width: 100%; margin-bottom: 8px; cursor: text; }
 .facts li b { font-variant-numeric: tabular-nums; }
 .note { color: var(--muted); font-size: 12px; margin: 4px 6px; }
 .chart .note { min-height: 16px; }
+
+/* update notice */
+.chip { padding: 2px 8px; font-size: 12px; color: var(--muted); border-radius: 10px; }
+.update { margin: 8px 16px 0; padding: 10px 14px; border: 1px solid var(--accent); background: #10203a; border-radius: 6px; }
+.update.ok { border-color: var(--ok); background: #0f2a20; }
+.update.bad { border-color: var(--crit); background: #2a1215; }
+.update .row1 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.update .row1 .msg { flex: 1; min-width: 220px; }
+.update .notes { margin: 8px 0 2px; padding: 8px 12px; background: var(--panel); border-radius: 4px; max-height: 260px; overflow: auto; font-size: 12px; }
+.update .notes ul { margin: 4px 0; padding-left: 18px; }
+.update progress { width: 180px; vertical-align: middle; }
+.update button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }

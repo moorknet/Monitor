@@ -24,6 +24,7 @@ public sealed class Config
     public List<LimitDef> LimitOverrides { get; set; } = new();
 
     public ElectricityConfig Electricity { get; set; } = new();
+    public UpdateConfig Update { get; set; } = new();
 
     /// <summary>Run with synthetic sensors/processes (development on non-Windows / no driver).</summary>
     public bool Simulate { get; set; }
@@ -89,4 +90,12 @@ public sealed class ElectricityConfig
     public int LongRetentionDays { get; set; } = 730;
 
     public double Total(double spot) => Provider == "fixed" ? FixedPricePerKwh : (spot + SurchargePerKwh) * (1 + VatPct / 100);
+}
+
+/// <summary>Self-update from GitHub Releases (see .github/workflows/release.yml).</summary>
+public sealed class UpdateConfig
+{
+    public bool Enabled { get; set; } = true;
+    public string Repo { get; set; } = "moorknet/Monitor";
+    public double CheckHours { get; set; } = 6;
 }

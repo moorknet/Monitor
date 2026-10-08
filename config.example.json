@@ -33,6 +33,9 @@
     "long_retention_days": 730
   },
 
+  // self-update from GitHub Releases (banner + "Update now" button in the viewer)
+  "update": { "enabled": true, "repo": "moorknet/Monitor", "check_hours": 6 },
+
   // same shape as profiles/*.json limits; wins over profiles for the same role
   "limit_overrides": [
     // { "role": "gpu.hotspot", "warn": 95, "crit": 105, "hysteresis": 2, "min_duration_s": 3, "source": "my tighter limit" }

@@ -1,0 +1,75 @@
+# Builds a Windows release on every push to the default branch (docs-only changes skipped).
+# Version = <major.minor from Directory.Build.props VersionPrefix>.<run number>, tag v<version>.
+# Installed services find it via the GitHub Releases API and offer it in the viewer ("Update now").
+name: release
+
+on:
+  push:
+    paths-ignore: ['**.md', '.gitignore']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Version
+        id: v
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content Directory.Build.props
+          $prefix = [version]($props.Project.PropertyGroup.VersionPrefix | Where-Object { $_ } | Select-Object -First 1)
+          $v = "$($prefix.Major).$($prefix.Minor).${{ github.run_number }}"
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $v"
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          $v = '${{ steps.v.outputs.version }}'
+          dotnet publish src/BlackBox.Service -c Release -r win-x64 "-p:Version=$v" -o out/publish
+          if ($LASTEXITCODE) { exit 1 }
+          dotnet publish src/BlackBox.SensorDump -c Release -r win-x64 "-p:Version=$v" -o out/publish/sensordump
+          if ($LASTEXITCODE) { exit 1 }
+          Copy-Item install.ps1, uninstall.ps1, README.md, config.example.json out/
+          $zip = "BlackBox-$v-win-x64.zip"
+          Compress-Archive -Path out/* -DestinationPath $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $zip" | Set-Content -NoNewline "$zip.sha256"
+
+      - name: Release notes
+        shell: bash
+        run: |
+          prev=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          range=${prev:+$prev..}HEAD
+          {
+            echo "## Changes"
+            git log $range --no-merges --pretty='- %s (%h)' | head -50
+            echo
+            echo "Install fresh: download the zip, extract, run \`install.ps1\` as administrator. Existing installs update from the viewer."
+          } > notes.md
+          cat notes.md
+
+      - name: Create release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=${{ steps.v.outputs.version }}
+          gh release create "v$v" "BlackBox-$v-win-x64.zip" "BlackBox-$v-win-x64.zip.sha256" \
+            --title "BlackBox $v" --notes-file notes.md --target "$GITHUB_SHA"
