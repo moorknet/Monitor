@@ -140,7 +140,7 @@ function overlayPlugin(getSeriesLimits) {
             ctx.beginPath(); ctx.moveTo(left, py); ctx.lineTo(left + width, py); ctx.stroke();
             ctx.setLineDash([]);
             ctx.fillStyle = color; ctx.font = `${10 * dpr}px system-ui`;
-            ctx.fillText(`${u.series[si].label}: ${v}`, left + 4 * dpr, py - 3 * dpr);
+            ctx.fillText(`${u.series[si].label}: ${+v.toFixed(2)}`, left + 4 * dpr, py - 3 * dpr);
           };
           if (near(lim.warn, true)) { line(lim.warn, 'rgba(245,165,36,0.8)'); line(lim.crit, 'rgba(229,72,77,0.9)'); }
           if (lim.kind === 'band' && near(lim.warn_lo, false)) { line(lim.warn_lo, 'rgba(245,165,36,0.8)'); line(lim.crit_lo, 'rgba(229,72,77,0.9)'); }
@@ -173,13 +173,85 @@ function selectHook(u) {
   loadPanel();
 }
 
+// What each event means and whether to worry: shown in the chart tooltip and the event list.
+const EVENT_INFO = {
+  power_loss: ['Recording stopped without a clean shutdown', 'Power cut, hard reset, or the PC crashed/froze. This is what BlackBox is for: open “last 60 s” to see the moments before.', 'bad'],
+  kernel_power_41: ['Windows: rebooted without a clean shutdown (Kernel-Power 41)', 'BugcheckCode 0 = the power simply went away (PSU, transient load spike, power button, cable). Non-zero = a blue screen happened first.', 'bad'],
+  unexpected_shutdown: ['Windows: previous shutdown was unexpected (6008)', 'Logged at the next boot; pairs with a power loss or crash just before it.', 'bad'],
+  bugcheck: ['Blue screen (BSOD)', 'The message has the stop code. Frequent causes: unstable CPU/RAM settings (EXPO/PBO/undervolt), drivers.', 'bad'],
+  whea: ['Hardware error reported by Windows (WHEA)', 'From CPU, memory or PCIe. A rare corrected one is harmless; repeated or fatal ones point at unstable overclock/EXPO/undervolt, PCIe riser or power delivery.', 'warn'],
+  gpu_tdr: ['GPU driver stopped responding and was reset', 'The display driver crashed and recovered (TDR). Usually an unstable GPU overclock/undervolt, driver issue or GPU power delivery.', 'bad'],
+  throttle: ['CPU throttling suspected', 'Clock dropped >15 % below its recent level under load while hot. Check cooling.', 'warn'],
+  limit_breach: ['A sensor went past its limit', 'See the message for which one; thresholds are in Settings → Limits. Brief warn-level peaks are often fine; sustained critical ones are not.', 'warn'],
+  limit_end: ['Sensor back within its limit', '', 'info'],
+  sensor_reset: ['Sensor reading restarted', 'Hardware stopped answering several times in a row (often right after a GPU driver reset). Harmless by itself.', 'info'],
+  db_reset: ['Database was damaged and replaced', 'Happens after a hard crash during a write; older data was kept aside. Harmless for new recording.', 'warn'],
+  thermal: ['Windows thermal event', 'Windows reported a thermal zone/limit event.', 'warn'],
+  cpu_firmware_limit: ['CPU speed limited by firmware', 'Windows reports the CPU is capped by BIOS/firmware (power or thermal limits, power plan). Logged at boot on many PCs — usually harmless.', 'info'],
+  slow_tick: ['Slow sensor read', 'Reading the hardware took longer than 200 ms. Harmless; BlackBox itself is still well within its CPU budget.', 'info'],
+  service_start: ['BlackBox started', '', 'info'], service_stop: ['BlackBox stopped cleanly', '', 'info'],
+  shutdown_initiated: ['Shutdown/restart requested', 'A user or program asked Windows to shut down or restart — a normal, clean shutdown.', 'info'],
+  update: ['BlackBox update', '', 'info'], update_installed: ['BlackBox updated', '', 'info'], update_failed: ['BlackBox update failed', 'The previous version was restored.', 'warn'],
+};
+const eventTitle = e => EVENT_INFO[e.kind]?.[0] || e.kind;
+const eventVerdict = e => ({ bad: 'Worth investigating', warn: 'Check if it repeats', info: 'Informational' })[EVENT_INFO[e.kind]?.[2] || (e.severity === 'crit' ? 'bad' : e.severity)];
+
+// Hover tooltip: lines within reach of the pointer (closest highlighted, others dimmed) and any event under it.
+function tooltipPlugin() {
+  let tip, over = false, focused = -1;
+  const focus = (u, si) => { if (si !== focused) { focused = si; u.setSeries(si > 0 ? si : null, { focus: true }); } };
+  return {
+    hooks: {
+      init: u => {
+        tip = document.createElement('div'); tip.className = 'tip'; tip.hidden = true;
+        u.over.appendChild(tip);
+        u.over.addEventListener('mouseenter', () => { over = true; });
+        u.over.addEventListener('mouseleave', () => { over = false; tip.hidden = true; focus(u, -1); });
+      },
+      setCursor: u => {
+        const { left, top, idx } = u.cursor;
+        if (!over || idx == null || left == null || left < 0) { tip.hidden = true; return; }
+        const evs = state.events.filter(e => Math.abs(u.valToPos(e.ts, 'x') - left) <= 5 && markerShown(e));
+        const hits = [];
+        for (let si = 1; si < u.series.length; si++) {
+          const s = u.series[si], v = u.data[si][idx];
+          if (!s.show || v == null) continue;
+          const d = Math.abs(u.valToPos(v, s.scale) - top);
+          if (d <= 14) hits.push({ si, d, v });
+        }
+        hits.sort((a, b) => a.d - b.d);
+        focus(u, hits.length ? hits[0].si : -1);
+        if (!hits.length && !evs.length) { tip.hidden = true; return; }
+        let h = `<div class="tt">${fmtTime(u.data[0][idx])}</div>`;
+        for (const { si, v } of hits) {
+          const s = u.series[si], val = s.value ? s.value(u, v, si, idx) : fmt(v);
+          h += `<div class="row"><i style="background:${typeof s.stroke === 'function' ? s.stroke(u, si) : s.stroke}"></i><span>${esc(s.label)}</span><b>${esc(val)}</b></div>`;
+        }
+        for (const e of evs.slice(0, 3)) {
+          h += `<div class="ev-tip ${esc(e.severity)}"><b>${esc(eventTitle(e))}</b> <span class="muted">${fmtTime(e.ts).slice(11)} · ${eventVerdict(e)}</span>` +
+            `${EVENT_INFO[e.kind]?.[1] ? `<div>${esc(EVENT_INFO[e.kind][1])}</div>` : ''}${e.message ? `<div class="muted">${esc(e.message.slice(0, 220))}</div>` : ''}</div>`;
+        }
+        tip.innerHTML = h;
+        tip.hidden = false;
+        const w = tip.offsetWidth, ow = u.over.clientWidth;
+        tip.style.left = (left + 14 + w > ow ? Math.max(0, left - 14 - w) : left + 14) + 'px';
+        tip.style.top = Math.max(0, Math.min(top + 14, u.over.clientHeight - tip.offsetHeight)) + 'px';
+      },
+    },
+  };
+}
+
+// fixed axis gutters so the same timestamp lands at the same x in every chart (with or without a right-hand axis)
+const AXIS_W = 56;
 function baseOpts(title, height = 200) {
   return {
     width: chartWidth(), height, ms: 1,
     cursor: { sync: { key: 'bb', setSeries: false }, drag: { x: true, y: false, setScale: false }, points: { size: 5 } },
+    focus: { alpha: 0.25 },
     select: { show: true },
     scales: { x: { time: true, range: () => [state.from, state.to] } },
-    legend: { live: true },
+    legend: { live: false },
+    padding: [10, AXIS_W + 14, 0, 0],   // + uPlot's spacing next to a right-hand axis
     hooks: { setSelect: [selectHook] },
   };
 }
@@ -234,14 +306,15 @@ async function loadSensorChart(def) {
   const units = [...new Set(sensors.map(scaleOf))];
   const opts = baseOpts(def.title);
   const lims = sensors.map(s => state.limitsBySensor.get(s.id));
-  opts.plugins = [overlayPlugin(() => lims)];
+  opts.plugins = [overlayPlugin(() => lims), tooltipPlugin()];
   opts.series = [{}, ...sensors.map((s, i) => ({
     label: label(s), scale: scaleOf(s), stroke: PALETTE[i % PALETTE.length], width: 1.25,
     value: (u, v) => v == null ? '–' : `${fmt(v, s.unit === 'V' ? 3 : s.unit === 'RPM' || s.unit === 'MHz' ? 0 : 1)} ${s.unit}`,
   }))];
+  if (units.length > 1) opts.padding = [10, 0, 0, 0];   // the right axis takes the gutter instead
   opts.axes = [{ stroke: '#8a94a0', grid: { stroke: '#232a32' }, ticks: { stroke: '#2a3038' } },
     ...units.slice(0, 2).map((unit, i) => ({
-      scale: unit, side: i === 0 ? 3 : 1, stroke: '#8a94a0', size: 56, label: unit, labelSize: 14,
+      scale: unit, side: i === 0 ? 3 : 1, stroke: '#8a94a0', size: AXIS_W, label: unit, labelSize: 14,
       grid: { show: i === 0, stroke: '#232a32' }, ticks: { stroke: '#2a3038' },
     }))];
   opts.scales = { ...opts.scales };
@@ -271,7 +344,7 @@ async function loadProcChart(def) {
   plot.innerHTML = '';
   if (d.t.length === 0) { plot.innerHTML = '<div class="empty">No process samples in range.</div>'; state.charts.delete(def.id); return; }
   const opts = baseOpts(def.title, 220);
-  opts.plugins = [overlayPlugin(null)];
+  opts.plugins = [overlayPlugin(null), tooltipPlugin()];
   opts.series = [{}, ...origIdx.map((k, i) => {
     const color = k === n - 1 ? '#5b6470' : PALETTE[k % PALETTE.length];
     return {
@@ -280,7 +353,7 @@ async function loadProcChart(def) {
     };
   })];
   opts.bands = origIdx.slice(1).map((_, i) => ({ series: [i + 2, i + 1] }));
-  opts.axes = [{ stroke: '#8a94a0', grid: { stroke: '#232a32' } }, { scale: 'W', stroke: '#8a94a0', size: 56, label: 'est. W', labelSize: 14, grid: { stroke: '#232a32' } }];
+  opts.axes = [{ stroke: '#8a94a0', grid: { stroke: '#232a32' } }, { scale: 'W', stroke: '#8a94a0', size: AXIS_W, label: 'est. W', labelSize: 14, grid: { stroke: '#232a32' } }];
   const u = new uPlot(opts, stacked, plot);
   state.charts.set(def.id, { u, key: 'procs' });
 }
@@ -351,7 +424,7 @@ async function loadPanel() {
 
   const evs = state.events.filter(e => e.ts >= r.from && e.ts <= r.to && e.kind !== 'limit_end').slice(-200).reverse();
   $('#eventList').innerHTML = evs.length ? evs.map(e => `<div class="ev ${esc(e.severity)}" data-ts="${e.ts}">
-      <span class="k">${esc(e.kind)}</span> <span class="muted">${fmtTime(e.ts)}</span>
+      <span class="k" title="${esc(EVENT_INFO[e.kind]?.[1] || '')}">${esc(eventTitle(e))}</span> <span class="muted">${fmtTime(e.ts)}</span>
       ${e.kind === 'power_loss' ? `<a href="#" data-shutdown="${e.id}">last 60 s ▸</a>` : ''}
       <div class="m">${esc(e.message)}</div></div>`).join('') : '<div class="muted">No events.</div>';
 

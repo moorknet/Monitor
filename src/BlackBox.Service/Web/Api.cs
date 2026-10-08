@@ -108,7 +108,18 @@ public static class Api
                     keys.Add(k);
                 }
             }
-            var grid = keys.ToArray();
+            // When nothing at all was recorded for longer than the slowest series' interval (service stopped, PC off,
+            // power loss), insert an explicit empty row so the chart breaks the line instead of drawing a diagonal.
+            long maxGapMs = (long)(Math.Max(bucket, cfg.Tier2EveryS * 1000) * 2.5);
+            var gridList = new List<long>(keys.Count + 8);
+            var gapKeys = new HashSet<long>();
+            long prev = long.MinValue;
+            foreach (var k in keys)
+            {
+                if (prev != long.MinValue && (k - prev) * bucket > maxGapMs) { gridList.Add(prev + 1); gapKeys.Add(prev + 1); }
+                gridList.Add(k); prev = k;
+            }
+            var grid = gridList.ToArray();
             await WriteJson(ctx.Response, w =>
             {
                 w.WriteStartObject();
@@ -129,7 +140,8 @@ public static class Api
                         double[]? last = null; long lastK = long.MinValue;
                         foreach (var k in grid)
                         {
-                            if (data[i].TryGetValue(k, out var v)) { last = v; lastK = k; Num(w, v[a]); }
+                            if (gapKeys.Contains(k)) { w.WriteNullValue(); last = null; }
+                            else if (data[i].TryGetValue(k, out var v)) { last = v; lastK = k; Num(w, v[a]); }
                             else if (last != null && (k - lastK) * bucket <= holdMs) Num(w, last[a]);
                             else w.WriteNullValue();
                         }
